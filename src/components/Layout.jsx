@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 
 const NAV = [
+  { to: '/inbox',       label: 'Inbox',       icon: '✉' },
   { to: '/sequences',   label: 'Sequences',   icon: '◈' },
   { to: '/templates',   label: 'Templates',   icon: '⊟' },
   { to: '/enrollments', label: 'Enrollments', icon: '◷' },
+  { to: '/senders',     label: 'Senders',     icon: '⊙' },
 ];
 
 function useIsMobile() {
@@ -78,6 +80,7 @@ export default function Layout() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const location = useLocation();
+  const isInbox = location.pathname.startsWith('/inbox');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
@@ -134,7 +137,15 @@ export default function Layout() {
         </aside>
 
         {/* Page content */}
-        <main style={{ flex: 1, overflowY: 'auto', padding: '1rem', paddingTop: 'calc(52px + 1rem)' }}>
+        <main style={{
+          flex: 1,
+          overflowY: isInbox ? 'hidden' : 'auto',
+          padding: isInbox ? 0 : '1rem',
+          paddingTop: isInbox ? '52px' : 'calc(52px + 1rem)',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+        }}>
           <Outlet />
         </main>
       </div>
@@ -153,7 +164,14 @@ export default function Layout() {
       }}>
         <SidebarContent dark={dark} setDark={setDark} navigate={navigate} />
       </aside>
-      <main style={{ flex: 1, overflowY: 'auto', padding: '2rem 2.5rem' }}>
+      <main style={{
+        flex: 1,
+        overflow: isInbox ? 'hidden' : 'auto',
+        padding: isInbox ? 0 : '2rem 2.5rem',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+      }}>
         <Outlet />
       </main>
     </div>

@@ -64,6 +64,27 @@ export const api = {
     list: () => call('/tags'),
     create: (name) => call('/tags', { method: 'POST', body: JSON.stringify({ name }) }),
   },
+  senders: {
+    list: () => call('/senders'),
+    get: (id) => call(`/senders/${id}`),
+    create: (body) => call('/senders', { method: 'POST', body: JSON.stringify(body) }),
+    update: (id, body) => call(`/senders/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    delete: (id) => call(`/senders/${id}`, { method: 'DELETE' }),
+  },
+  inbox: {
+    list: (params = {}) => {
+      const q = new URLSearchParams();
+      if (params.sender_id) q.set('sender_id', params.sender_id);
+      if (params.unread) q.set('unread', '1');
+      if (params.limit) q.set('limit', params.limit);
+      if (params.offset) q.set('offset', params.offset);
+      return call(`/inbox${q.toString() ? '?' + q : ''}`);
+    },
+    get: (id) => call(`/inbox/${id}`),
+    markRead: (id) => call(`/inbox/${id}/read`, { method: 'PUT' }),
+    reply: (id, body) => call(`/inbox/${id}/reply`, { method: 'POST', body: JSON.stringify(body) }),
+    delete: (id) => call(`/inbox/${id}`, { method: 'DELETE' }),
+  },
   diag: () => call('/diag'),
 };
 

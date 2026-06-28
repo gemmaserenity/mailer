@@ -1,5 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
+import InboxView from './pages/InboxView.jsx';
+import SendersManager from './pages/SendersManager.jsx';
 import SequenceList from './pages/SequenceList.jsx';
 import SequenceDetail from './pages/SequenceDetail.jsx';
 import TemplateList from './pages/TemplateList.jsx';
@@ -10,7 +12,9 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Navigate to="/sequences" replace />} />
+        <Route index element={<Navigate to="/inbox" replace />} />
+        <Route path="/inbox" element={<InboxView />} />
+        <Route path="/senders" element={<SendersManager />} />
         <Route path="/sequences" element={<SequenceList />} />
         <Route path="/sequences/new" element={<SequenceDetail />} />
         <Route path="/sequences/:id" element={<SequenceDetail />} />
@@ -18,7 +22,7 @@ export default function App() {
         <Route path="/templates/new" element={<TemplateEditor />} />
         <Route path="/templates/:id" element={<TemplateEditor />} />
         <Route path="/enrollments" element={<EnrollmentMonitor />} />
-        <Route path="*" element={<Navigate to="/sequences" replace />} />
+        <Route path="*" element={<Navigate to="/inbox" replace />} />
       </Route>
     </Routes>
   );
