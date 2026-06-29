@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import ComposeModal from '../pages/ComposeModal.jsx';
 
 const NAV = [
   { to: '/inbox',       label: 'Inbox',       icon: '✉' },
@@ -19,7 +20,7 @@ function useIsMobile() {
   return mobile;
 }
 
-function SidebarContent({ onNav, dark, setDark, navigate }) {
+function SidebarContent({ onNav, dark, setDark, navigate, onCompose }) {
   return (
     <>
       <div style={{ padding: '0 1.25rem 1.5rem', borderBottom: '1.5px solid var(--border)' }}>
@@ -55,20 +56,43 @@ function SidebarContent({ onNav, dark, setDark, navigate }) {
       </nav>
 
       <div style={{ padding: '.75rem 1.25rem', borderTop: '1.5px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button
-          onClick={() => { navigate('/sequences/new'); onNav?.(); }}
-          className="btn-primary"
-          style={{ fontSize: '13px', padding: '.35rem .8rem' }}
-        >
-          + New
-        </button>
-        <button
-          onClick={() => setDark(d => !d)}
-          style={{ background: 'var(--surface-2)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', padding: '.3rem .6rem', fontSize: '15px' }}
-          title="Toggle dark mode"
-        >
-          {dark ? '☀' : '◐'}
-        </button>
+        <div style={{ display: 'flex', gap: '.35rem' }}>
+          <button
+            onClick={() => { onCompose?.(); onNav?.(); }}
+            className="btn-primary"
+            style={{ fontSize: '13px', padding: '.35rem .8rem' }}
+          >
+            ✉ New Email
+          </button>
+          <button
+            onClick={() => { navigate('/sequences/new'); onNav?.(); }}
+            style={{ fontSize: '13px', padding: '.35rem .8rem', background: 'none', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-muted)' }}
+          >
+            + Sequence
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: '.35rem' }}>
+          <NavLink
+            to="/settings"
+            onClick={onNav}
+            style={({ isActive }) => ({
+              background: isActive ? 'var(--surface-2)' : 'var(--surface-2)',
+              border: `1.5px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+              borderRadius: 'var(--radius)', padding: '.3rem .6rem', fontSize: '15px',
+              textDecoration: 'none', color: 'var(--text)', lineHeight: 1,
+            })}
+            title="Settings"
+          >
+            ⚙
+          </NavLink>
+          <button
+            onClick={() => setDark(d => !d)}
+            style={{ background: 'var(--surface-2)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', padding: '.3rem .6rem', fontSize: '15px' }}
+            title="Toggle dark mode"
+          >
+            {dark ? '☀' : '◐'}
+          </button>
+        </div>
       </div>
     </>
   );
@@ -77,6 +101,7 @@ function SidebarContent({ onNav, dark, setDark, navigate }) {
 export default function Layout() {
   const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const location = useLocation();
@@ -133,7 +158,7 @@ export default function Layout() {
           transform: drawerOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform .22s ease',
         }}>
-          <SidebarContent onNav={closeDrawer} dark={dark} setDark={setDark} navigate={navigate} />
+          <SidebarContent onNav={closeDrawer} dark={dark} setDark={setDark} navigate={navigate} onCompose={() => setComposeOpen(true)} />
         </aside>
 
         {/* Page content */}
@@ -148,6 +173,7 @@ export default function Layout() {
         }}>
           <Outlet />
         </main>
+        {composeOpen && <ComposeModal onClose={() => setComposeOpen(false)} />}
       </div>
     );
   }
@@ -162,7 +188,7 @@ export default function Layout() {
         display: 'flex', flexDirection: 'column',
         flexShrink: 0, padding: '1.5rem 0',
       }}>
-        <SidebarContent dark={dark} setDark={setDark} navigate={navigate} />
+        <SidebarContent dark={dark} setDark={setDark} navigate={navigate} onCompose={() => setComposeOpen(true)} />
       </aside>
       <main style={{
         flex: 1,
@@ -174,6 +200,7 @@ export default function Layout() {
       }}>
         <Outlet />
       </main>
+      {composeOpen && <ComposeModal onClose={() => setComposeOpen(false)} />}
     </div>
   );
 }

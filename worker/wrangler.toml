@@ -1,0 +1,46 @@
+name = "mailer-worker"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+# Deploy under the gemma-serenity workers.dev subdomain
+# wrangler deploy — run from this directory
+
+[triggers]
+# No scheduled cron needed — Cloudflare Workflows handles all timing
+# Leave this empty; Workflows are the runtime
+
+[[workflows]]
+name = "MailerEnrollment"
+binding = "MAILER_WORKFLOW"
+class_name = "MailerWorkflow"
+
+[[r2_buckets]]
+binding = "ATTACHMENTS"
+bucket_name = "mailer-attachments"
+
+[vars]
+TMQ_SEQUENCE_ID = "6a55b1cf-48d1-4a68-8413-8ede8786521f"
+
+# Secrets — set ALL of these via Cloudflare dashboard, NOT wrangler secret put
+# (wrangler secret put has a paste-masking bug that silently truncates values)
+#
+# Required secrets:
+#   SUPABASE_URL          — https://jjeqijptbfutrziykoff.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY — sb_secret_... from Supabase Project Settings > API
+#   RESEND_API_KEY        — re_... from Resend dashboard
+#   ADMIN_SECRET          — random 32-char hex (used by frontend to auth all API calls)
+#   RESEND_WEBHOOK_SECRET — signing secret from Resend dashboard > Webhooks
+#
+# Generate ADMIN_SECRET:
+#   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"

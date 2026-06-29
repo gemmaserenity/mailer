@@ -35,6 +35,13 @@ function useIsMobile() {
   return mobile;
 }
 
+const BTN = {
+  background: 'none', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)',
+  padding: '.25rem .65rem', fontSize: 12, cursor: 'pointer', color: 'var(--text)',
+  transition: 'border-color .12s, color .12s', whiteSpace: 'nowrap',
+};
+const BTN_DANGER = { ...BTN, color: '#b04a3a', borderColor: 'transparent' };
+
 export default function InboxView() {
   const [senders, setSenders] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -42,25 +49,31 @@ export default function InboxView() {
   const [selectedMsg, setSelectedMsg] = useState(null);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingMsg, setLoadingMsg] = useState(false);
-  const [replyOpen, setReplyOpen] = useState(false);
-  const [replyBody, setReplyBody] = useState('');
-  const [replying, setReplying] = useState(false);
   const [error, setError] = useState(null);
+  const [actionMsg, setActionMsg] = useState(null);
+
+  // compose state
+  const [composeMode, setComposeMode] = useState(null); // 'reply' | 'replyall' | 'forward'
+  const [composeTo, setComposeTo] = useState('');
+  const [composeCC, setComposeCC] = useState('');
+  const [composeBody, setComposeBody] = useState('');
+  const [composing, setComposing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   const isMobile = useIsMobile();
+  const perPage = parseInt(localStorage.getItem('mailer_per_page') || '50', 10);
 
-  useEffect(() => {
-    api.senders.list().then(setSenders).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    loadMessages();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSender]);
+  useEffect(() => { api.senders.list().then(setSenders).catch(() => {}); }, []);
+  useEffect(() => { loadMessages(); }, [selectedSender]); // eslint-disable-line
 
   async function loadMessages() {
     setLoadingList(true);
     try {
-      const params = selectedSender !== 'all' ? { sender_id: selectedSender } : {};
+      const params = selectedSender === 'archived'
+        ? { archived: true, limit: perPage }
+        : selectedSender !== 'all'
+          ? { sender_id: selectedSender, limit: perPage }
+          : { limit: perPage };
       setMessages(await api.inbox.list(params));
       setError(null);
     } catch (e) {
@@ -73,8 +86,9 @@ export default function InboxView() {
 
   async function openMessage(msg) {
     setSelectedMsg(msg);
-    setReplyOpen(false);
-    setReplyBody('');
+    setComposeMode(null);
+    setConfirmDelete(false);
+    setActionMsg(null);
     if (!msg.read) {
       try {
         await api.inbox.markRead(msg.id);
@@ -91,70 +105,114 @@ export default function InboxView() {
     }
   }
 
-  async function sendReply() {
-    if (!replyBody.trim() || !selectedMsg) return;
-    setReplying(true);
+  function openCompose(mode) {
+    const sig = localStorage.getItem('mailer_signature') || '';
+    const sigText = sig ? `\n\n--\n${sig}` : '';
+    setComposeMode(mode);
+    setComposeTo(mode === 'forward' ? '' : selectedMsg.from_email || '');
+    setComposeCC(mode === 'replyall' ? (selectedMsg.cc || []).join(', ') : '');
+    setComposeBody(sigText);
+    setConfirmDelete(false);
+  }
+
+  function closeCompose() {
+    setComposeMode(null);
+    setComposeTo('');
+    setComposeCC('');
+    setComposeBody('');
+  }
+
+  function flash(msg) {
+    setActionMsg(msg);
+    setTimeout(() => setActionMsg(null), 3000);
+  }
+
+  async function sendCompose() {
+    setComposing(true);
     try {
-      await api.inbox.reply(selectedMsg.id, { body: replyBody });
-      setReplyBody('');
-      setReplyOpen(false);
+      if (composeMode === 'forward') {
+        if (!composeTo.trim()) return;
+        await api.inbox.forward(selectedMsg.id, { to: composeTo.trim(), note: composeBody });
+      } else {
+        const cc = composeMode === 'replyall'
+          ? composeCC.split(',').map(e => e.trim()).filter(Boolean)
+          : [];
+        await api.inbox.reply(selectedMsg.id, { body: composeBody, cc });
+      }
+      flash('Sent');
+      closeCompose();
     } catch (e) {
       setError(e.message);
     } finally {
-      setReplying(false);
+      setComposing(false);
+    }
+  }
+
+  async function handleArchive() {
+    try {
+      if (selectedMsg.archived) {
+        await api.inbox.unarchive(selectedMsg.id);
+        flash('Moved to inbox');
+      } else {
+        await api.inbox.archive(selectedMsg.id);
+        flash('Archived');
+      }
+      setMessages(prev => prev.filter(m => m.id !== selectedMsg.id));
+      setSelectedMsg(null);
+    } catch (e) { setError(e.message); }
+  }
+
+  async function handleDelete() {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    try {
+      await api.inbox.delete(selectedMsg.id);
+      setMessages(prev => prev.filter(m => m.id !== selectedMsg.id));
+      setSelectedMsg(null);
+      setConfirmDelete(false);
+    } catch (e) {
+      setError(e.message);
+      setConfirmDelete(false);
     }
   }
 
   const unreadCount = messages.filter(m => !m.read).length;
 
+  const pillStyle = (active) => ({
+    flexShrink: 0, padding: '.2rem .6rem', borderRadius: 99, fontSize: 12,
+    fontWeight: active ? 600 : 400,
+    background: active ? 'var(--accent)' : 'transparent',
+    color: active ? 'var(--bg)' : 'var(--text-muted)',
+    border: '1.5px solid ' + (active ? 'var(--accent)' : 'var(--border)'),
+    cursor: 'pointer', transition: 'all .12s', whiteSpace: 'nowrap',
+  });
+
   const MessageList = (
     <div style={{
-      width: isMobile ? '100%' : 300,
-      flexShrink: 0,
+      width: isMobile ? '100%' : 300, flexShrink: 0,
       borderRight: isMobile ? 'none' : '1.5px solid var(--border)',
-      display: 'flex',
-      flexDirection: 'column',
-      background: 'var(--surface)',
-      overflow: 'hidden',
-      height: '100%',
+      display: 'flex', flexDirection: 'column', background: 'var(--surface)',
+      overflow: 'hidden', height: '100%',
     }}>
       <div style={{ padding: '1rem 1.25rem', borderBottom: '1.5px solid var(--border)', flexShrink: 0 }}>
         <div className="row-between" style={{ marginBottom: '.6rem' }}>
           <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Inbox</h2>
           <div className="row" style={{ gap: '.4rem' }}>
             {unreadCount > 0 && (
-              <span style={{
-                background: 'var(--accent)', color: 'var(--bg)',
-                borderRadius: 99, fontSize: 11, fontWeight: 700, padding: '.1rem .5rem',
-              }}>{unreadCount}</span>
+              <span style={{ background: 'var(--accent)', color: 'var(--bg)', borderRadius: 99, fontSize: 11, fontWeight: 700, padding: '.1rem .5rem' }}>
+                {unreadCount}
+              </span>
             )}
-            <button
-              onClick={loadMessages}
-              style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: 'var(--text-muted)', padding: '.2rem .4rem', borderRadius: 'var(--radius)' }}
-              title="Refresh"
-            >↺</button>
+            <button onClick={loadMessages} style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: 'var(--text-muted)', padding: '.2rem .4rem', borderRadius: 'var(--radius)' }} title="Refresh">↺</button>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '.35rem', overflowX: 'auto', paddingBottom: '.25rem', scrollbarWidth: 'none' }}>
-          {[{ id: 'all', email: 'All' }, ...senders].map(s => (
-            <button
-              key={s.id}
-              onClick={() => setSelectedSender(s.id)}
-              style={{
-                flexShrink: 0,
-                padding: '.2rem .6rem',
-                borderRadius: 99,
-                fontSize: 12,
-                fontWeight: selectedSender === s.id ? 600 : 400,
-                background: selectedSender === s.id ? 'var(--accent)' : 'transparent',
-                color: selectedSender === s.id ? 'var(--bg)' : 'var(--text-muted)',
-                border: '1.5px solid ' + (selectedSender === s.id ? 'var(--accent)' : 'var(--border)'),
-                cursor: 'pointer',
-                transition: 'all .12s',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {s.id === 'all' ? 'All' : (s.email || '').split('@')[0]}
+          {[
+            { id: 'all', label: 'All' },
+            { id: 'archived', label: '⊟ Archived' },
+            ...senders.map(s => ({ id: s.id, label: (s.email || '').split('@')[0] })),
+          ].map(s => (
+            <button key={s.id} onClick={() => setSelectedSender(s.id)} style={pillStyle(selectedSender === s.id)}>
+              {s.label}
             </button>
           ))}
         </div>
@@ -165,37 +223,25 @@ export default function InboxView() {
         {loadingList && <div className="loading">Loading…</div>}
         {!loadingList && messages.length === 0 && !error && (
           <div style={{ padding: '2rem 1.25rem', textAlign: 'center', color: 'var(--text-xmuted)', fontSize: 14 }}>
-            No messages yet
+            No messages
           </div>
         )}
         {messages.map(msg => (
-          <div
-            key={msg.id}
-            onClick={() => openMessage(msg)}
-            style={{
-              padding: '.8rem 1.25rem',
-              borderBottom: '1px solid var(--border)',
-              cursor: 'pointer',
-              background: selectedMsg?.id === msg.id ? 'var(--surface-2)' : 'transparent',
-              borderLeft: `3px solid ${msg.read ? 'transparent' : 'var(--accent)'}`,
-              transition: 'background .1s',
-            }}
-          >
+          <div key={msg.id} onClick={() => openMessage(msg)} style={{
+            padding: '.8rem 1.25rem', borderBottom: '1px solid var(--border)', cursor: 'pointer',
+            background: selectedMsg?.id === msg.id ? 'var(--surface-2)' : 'transparent',
+            borderLeft: `3px solid ${msg.read ? 'transparent' : 'var(--accent)'}`,
+            transition: 'background .1s',
+          }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '.15rem' }}>
-              <span style={{
-                fontWeight: msg.read ? 400 : 600, fontSize: 13,
-                flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
+              <span style={{ fontWeight: msg.read ? 400 : 600, fontSize: 13, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {msg.from_name || msg.from_email}
               </span>
               <span style={{ fontSize: 11, color: 'var(--text-xmuted)', flexShrink: 0, marginLeft: '.5rem' }}>
                 {fmtDateTime(msg.received_at)}
               </span>
             </div>
-            <div style={{
-              fontSize: 13, fontWeight: msg.read ? 400 : 500, marginBottom: '.1rem',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
+            <div style={{ fontSize: 13, fontWeight: msg.read ? 400 : 500, marginBottom: '.1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {msg.subject || '(no subject)'}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-xmuted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -219,10 +265,9 @@ export default function InboxView() {
       ) : (
         <div style={{ flex: 1, overflowY: 'auto', padding: '2rem 2.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           {isMobile && (
-            <button className="btn-ghost btn-sm" onClick={() => setSelectedMsg(null)} style={{ alignSelf: 'flex-start' }}>
-              ← Back
-            </button>
+            <button className="btn-ghost btn-sm" onClick={() => setSelectedMsg(null)} style={{ alignSelf: 'flex-start' }}>← Back</button>
           )}
+
           <div>
             <h1 style={{ margin: '0 0 .6rem', fontSize: '1.65rem', lineHeight: 1.2 }}>
               {selectedMsg.subject || '(no subject)'}
@@ -236,6 +281,12 @@ export default function InboxView() {
                 <span style={{ color: 'var(--text-xmuted)', fontWeight: 500, textTransform: 'uppercase', fontSize: 11, letterSpacing: '.04em', marginRight: '.3rem' }}>To</span>
                 {selectedMsg.to || selectedMsg.sender_email}
               </span>
+              {selectedMsg.cc?.length > 0 && (
+                <span>
+                  <span style={{ color: 'var(--text-xmuted)', fontWeight: 500, textTransform: 'uppercase', fontSize: 11, letterSpacing: '.04em', marginRight: '.3rem' }}>CC</span>
+                  {selectedMsg.cc.join(', ')}
+                </span>
+              )}
               <span>
                 <span style={{ color: 'var(--text-xmuted)', fontWeight: 500, textTransform: 'uppercase', fontSize: 11, letterSpacing: '.04em', marginRight: '.3rem' }}>Date</span>
                 {fmtDateTime(selectedMsg.received_at)}
@@ -248,10 +299,7 @@ export default function InboxView() {
           {loadingMsg ? (
             <div className="loading" style={{ padding: '1rem 0' }}>Loading message…</div>
           ) : selectedMsg.body_html ? (
-            <div
-              style={{ fontSize: 15, lineHeight: 1.65, flex: 1 }}
-              dangerouslySetInnerHTML={{ __html: selectedMsg.body_html }}
-            />
+            <div style={{ fontSize: 15, lineHeight: 1.65, flex: 1 }} dangerouslySetInnerHTML={{ __html: selectedMsg.body_html }} />
           ) : (
             <pre style={{ fontFamily: 'inherit', whiteSpace: 'pre-wrap', margin: 0, fontSize: 15, lineHeight: 1.65, flex: 1 }}>
               {selectedMsg.body_text || '(empty message)'}
@@ -265,51 +313,72 @@ export default function InboxView() {
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem' }}>
                 {selectedMsg.attachments.map((att, i) => (
-                  <button
-                    key={i}
-                    onClick={() => downloadAttachment(att)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '.35rem',
-                      padding: '.3rem .7rem', borderRadius: 'var(--radius)',
-                      border: '1.5px solid var(--border)', background: 'var(--surface)',
-                      cursor: 'pointer', fontSize: 12, color: 'var(--text)',
-                      transition: 'border-color .12s',
-                    }}
+                  <button key={i} onClick={() => downloadAttachment(att)} style={BTN}
                     onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
                     onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
                   >
-                    <span>⊙</span>
-                    <span>{att.filename}</span>
-                    {att.size > 0 && <span style={{ color: 'var(--text-xmuted)' }}>{fmtSize(att.size)}</span>}
+                    ⊙ {att.filename}{att.size > 0 ? ` · ${fmtSize(att.size)}` : ''}
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          <div style={{ borderTop: '1.5px solid var(--border)', paddingTop: '1rem', marginTop: 'auto' }}>
-            {!replyOpen ? (
-              <button className="btn-ghost" onClick={() => setReplyOpen(true)}>↩ Reply</button>
+          {/* Action bar */}
+          <div style={{ borderTop: '1.5px solid var(--border)', paddingTop: '1rem', flexShrink: 0 }}>
+            {!composeMode ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '.5rem' }}>
+                <div style={{ display: 'flex', gap: '.4rem' }}>
+                  <button style={BTN} onClick={() => openCompose('reply')}>↩ Reply</button>
+                  <button style={BTN} onClick={() => openCompose('replyall')}>↩↩ Reply All</button>
+                  <button style={BTN} onClick={() => openCompose('forward')}>→ Forward</button>
+                </div>
+                <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
+                  {actionMsg && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{actionMsg}</span>}
+                  <button style={BTN} onClick={handleArchive} title={selectedMsg.archived ? 'Move to inbox' : 'Archive'}>
+                    {selectedMsg.archived ? '↩ Unarchive' : '⊟ Archive'}
+                  </button>
+                  {confirmDelete ? (
+                    <>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Delete forever?</span>
+                      <button onClick={handleDelete} style={{ ...BTN, background: '#b04a3a', color: '#fff', borderColor: '#b04a3a' }}>Yes</button>
+                      <button style={BTN} onClick={() => setConfirmDelete(false)}>No</button>
+                    </>
+                  ) : (
+                    <button style={BTN_DANGER} onClick={handleDelete}>✕ Delete</button>
+                  )}
+                </div>
+              </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
-                <label style={{ marginBottom: 0 }}>
-                  Reply to {selectedMsg.from_name || selectedMsg.from_email}
-                </label>
+                {composeMode === 'forward' ? (
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, color: 'var(--text-xmuted)', marginBottom: '.25rem' }}>To</label>
+                    <input value={composeTo} onChange={e => setComposeTo(e.target.value)} placeholder="recipient@example.com" style={{ width: '100%', boxSizing: 'border-box' }} autoFocus />
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {composeMode === 'reply' ? 'Replying to' : 'Replying all to'}{' '}
+                    <strong>{selectedMsg.from_name || selectedMsg.from_email}</strong>
+                    {composeMode === 'replyall' && composeCC && (
+                      <span style={{ color: 'var(--text-xmuted)' }}> · CC: {composeCC}</span>
+                    )}
+                  </div>
+                )}
                 <textarea
-                  value={replyBody}
-                  onChange={e => setReplyBody(e.target.value)}
-                  placeholder="Type your reply…"
+                  value={composeBody}
+                  onChange={e => setComposeBody(e.target.value)}
+                  placeholder={composeMode === 'forward' ? 'Add a note (optional)…' : 'Type your message…'}
                   rows={5}
                   style={{ resize: 'vertical' }}
-                  autoFocus
+                  autoFocus={composeMode !== 'forward'}
                 />
                 <div className="row" style={{ gap: '.5rem' }}>
-                  <button className="btn-primary" onClick={sendReply} disabled={replying || !replyBody.trim()}>
-                    {replying ? 'Sending…' : 'Send'}
+                  <button className="btn-primary" onClick={sendCompose}
+                    disabled={composing || (composeMode === 'forward' ? !composeTo.trim() : !composeBody.trim())}>
+                    {composing ? 'Sending…' : composeMode === 'forward' ? 'Forward' : 'Send'}
                   </button>
-                  <button className="btn-ghost" onClick={() => { setReplyOpen(false); setReplyBody(''); }}>
-                    Cancel
-                  </button>
+                  <button className="btn-ghost" onClick={closeCompose}>Cancel</button>
                 </div>
               </div>
             )}
@@ -321,10 +390,7 @@ export default function InboxView() {
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      {isMobile
-        ? (selectedMsg ? MessageContent : MessageList)
-        : <>{MessageList}{MessageContent}</>
-      }
+      {isMobile ? (selectedMsg ? MessageContent : MessageList) : <>{MessageList}{MessageContent}</>}
     </div>
   );
 }

@@ -75,15 +75,28 @@ export const api = {
     list: (params = {}) => {
       const q = new URLSearchParams();
       if (params.sender_id) q.set('sender_id', params.sender_id);
+      if (params.archived) q.set('archived', '1');
       if (params.unread) q.set('unread', '1');
-      if (params.limit) q.set('limit', params.limit);
-      if (params.offset) q.set('offset', params.offset);
+      if (params.limit) q.set('limit', String(params.limit));
+      if (params.offset) q.set('offset', String(params.offset));
       return call(`/inbox${q.toString() ? '?' + q : ''}`);
     },
     get: (id) => call(`/inbox/${id}`),
     markRead: (id) => call(`/inbox/${id}/read`, { method: 'PUT' }),
     reply: (id, body) => call(`/inbox/${id}/reply`, { method: 'POST', body: JSON.stringify(body) }),
+    forward: (id, body) => call(`/inbox/${id}/forward`, { method: 'POST', body: JSON.stringify(body) }),
+    archive: (id) => call(`/inbox/${id}/archive`, { method: 'PUT' }),
+    unarchive: (id) => call(`/inbox/${id}/archive`, { method: 'DELETE' }),
     delete: (id) => call(`/inbox/${id}`, { method: 'DELETE' }),
+  },
+  compose: {
+    send: (body) => call('/send-email', { method: 'POST', body: JSON.stringify(body) }),
+    listSent: (params = {}) => {
+      const q = new URLSearchParams();
+      if (params.limit) q.set('limit', String(params.limit));
+      if (params.offset) q.set('offset', String(params.offset));
+      return call(`/sent-emails${q.toString() ? '?' + q : ''}`);
+    },
   },
   diag: () => call('/diag'),
 };

@@ -7,6 +7,7 @@ import SequenceDetail from './pages/SequenceDetail.jsx';
 import TemplateList from './pages/TemplateList.jsx';
 import TemplateEditor from './pages/TemplateEditor.jsx';
 import EnrollmentMonitor from './pages/EnrollmentMonitor.jsx';
+import Settings from './pages/Settings.jsx';
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/templates/new" element={<TemplateEditor />} />
         <Route path="/templates/:id" element={<TemplateEditor />} />
         <Route path="/enrollments" element={<EnrollmentMonitor />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/inbox" replace />} />
       </Route>
     </Routes>
