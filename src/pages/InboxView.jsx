@@ -1,6 +1,30 @@
 import { useState, useEffect } from 'react';
 import { api, fmtDateTime } from '../lib/api.js';
 
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || '';
+const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || '';
+
+function fmtSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function downloadAttachment(att) {
+  const res = await fetch(`${WORKER_URL}/attachments?key=${encodeURIComponent(att.r2_key)}`, {
+    headers: { 'X-Admin-Secret': ADMIN_SECRET },
+  });
+  if (!res.ok) return;
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = att.filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function useIsMobile() {
   const [mobile, setMobile] = useState(() => window.innerWidth <= 768);
   useEffect(() => {
@@ -232,6 +256,35 @@ export default function InboxView() {
             <pre style={{ fontFamily: 'inherit', whiteSpace: 'pre-wrap', margin: 0, fontSize: 15, lineHeight: 1.65, flex: 1 }}>
               {selectedMsg.body_text || '(empty message)'}
             </pre>
+          )}
+
+          {selectedMsg.attachments?.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.06em', color: 'var(--text-xmuted)', marginBottom: '.5rem', textTransform: 'uppercase' }}>
+                Attachments
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem' }}>
+                {selectedMsg.attachments.map((att, i) => (
+                  <button
+                    key={i}
+                    onClick={() => downloadAttachment(att)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '.35rem',
+                      padding: '.3rem .7rem', borderRadius: 'var(--radius)',
+                      border: '1.5px solid var(--border)', background: 'var(--surface)',
+                      cursor: 'pointer', fontSize: 12, color: 'var(--text)',
+                      transition: 'border-color .12s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                  >
+                    <span>⊙</span>
+                    <span>{att.filename}</span>
+                    {att.size > 0 && <span style={{ color: 'var(--text-xmuted)' }}>{fmtSize(att.size)}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           <div style={{ borderTop: '1.5px solid var(--border)', paddingTop: '1rem', marginTop: 'auto' }}>
