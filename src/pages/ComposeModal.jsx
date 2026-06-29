@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../lib/api.js';
 
 function parseEmailList(str) {
@@ -46,22 +46,25 @@ const LABEL = {
 
 const ROW = { marginBottom: '.75rem' };
 
-export default function ComposeModal({ onClose, onSent }) {
+export default function ComposeModal({ onClose, onSent, draft = null, onDraftSaved }) {
   const [senders, setSenders] = useState([]);
-  const [senderId, setSenderId] = useState('');
-  const [fromName, setFromName] = useState('');
-  const [to, setTo] = useState('');
-  const [cc, setCc] = useState('');
-  const [bcc, setBcc] = useState('');
-  const [showCc, setShowCc] = useState(false);
-  const [showBcc, setShowBcc] = useState(false);
-  const [subject, setSubject] = useState('');
-  const [previewText, setPreviewText] = useState('');
-  const [bodyText, setBodyText] = useState('');
-  const [bodyHtml, setBodyHtml] = useState('');
-  const [useHtml, setUseHtml] = useState(false);
+  const [senderId, setSenderId] = useState(draft?.sender_id || '');
+  const [fromName, setFromName] = useState(draft?.from_name || '');
+  const [to, setTo] = useState((draft?.to_addresses || []).join(', '));
+  const [cc, setCc] = useState((draft?.cc || []).join(', '));
+  const [bcc, setBcc] = useState((draft?.bcc || []).join(', '));
+  const [showCc, setShowCc] = useState(!!(draft?.cc?.length));
+  const [showBcc, setShowBcc] = useState(!!(draft?.bcc?.length));
+  const [subject, setSubject] = useState(draft?.subject || '');
+  const [previewText, setPreviewText] = useState(draft?.preview_text || '');
+  const [bodyText, setBodyText] = useState(draft?.body_text || '');
+  const [bodyHtml, setBodyHtml] = useState(draft?.body_html || '');
+  const [useHtml, setUseHtml] = useState(draft?.use_html || false);
   const [attachments, setAttachments] = useState([]);
   const [sending, setSending] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftId, setDraftId] = useState(draft?.id || null);
+  const [draftSaved, setDraftSaved] = useState(false);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -69,12 +72,12 @@ export default function ComposeModal({ onClose, onSent }) {
     api.senders.list().then(data => {
       const active = (data || []).filter(s => s.active !== false);
       setSenders(active);
-      if (active.length) {
+      if (!senderId && active.length) {
         setSenderId(active[0].id);
-        setFromName(active[0].name);
+        if (!fromName) setFromName(active[0].name);
       }
     }).catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line
 
   useEffect(() => {
     const fn = (e) => { if (e.key === 'Escape') onClose(); };
@@ -108,6 +111,42 @@ export default function ComposeModal({ onClose, onSent }) {
     setAttachments(prev => prev.filter((_, i) => i !== idx));
   }
 
+  function draftPayload() {
+    return {
+      sender_id: senderId || null,
+      from_name: fromName.trim(),
+      to: parseEmailList(to),
+      cc: parseEmailList(cc),
+      bcc: parseEmailList(bcc),
+      subject: subject.trim(),
+      preview_text: previewText.trim(),
+      body_text: bodyText,
+      body_html: bodyHtml,
+      use_html: useHtml,
+      attachments: [],
+    };
+  }
+
+  async function handleSaveDraft() {
+    setSavingDraft(true);
+    setError(null);
+    try {
+      if (draftId) {
+        await api.drafts.update(draftId, draftPayload());
+      } else {
+        const saved = await api.drafts.create(draftPayload());
+        setDraftId(saved?.id || null);
+      }
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2500);
+      onDraftSaved?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
   async function handleSend() {
     const toList = parseEmailList(to);
     if (!senderId) { setError('Select a sender'); return; }
@@ -129,6 +168,10 @@ export default function ComposeModal({ onClose, onSent }) {
         body_html: useHtml ? bodyHtml : undefined,
         attachments: attachments.map(({ filename, content_type, content, size }) => ({ filename, content_type, content, size })),
       });
+      // Delete draft if it was opened from one
+      if (draftId) {
+        try { await api.drafts.delete(draftId); } catch {}
+      }
       onSent?.();
       onClose();
     } catch (e) {
@@ -346,11 +389,16 @@ export default function ComposeModal({ onClose, onSent }) {
           <button className="btn-primary" onClick={handleSend} disabled={!canSend}>
             {sending ? 'Sending…' : '↑ Send Email'}
           </button>
+          <button
+            onClick={handleSaveDraft}
+            disabled={savingDraft || sending}
+            style={{ background: 'none', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', padding: '.38rem .8rem', fontSize: 13, cursor: 'pointer', color: 'var(--text-muted)' }}
+          >
+            {savingDraft ? 'Saving…' : '✎ Save Draft'}
+          </button>
           <button className="btn-ghost" onClick={onClose} disabled={sending}>Cancel</button>
-          {sending && (
-            <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: '.25rem' }}>
-              Sending…
-            </span>
+          {draftSaved && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: '.25rem' }}>Draft saved</span>
           )}
         </div>
       </div>

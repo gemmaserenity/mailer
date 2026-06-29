@@ -1,6 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
 import InboxView from './pages/InboxView.jsx';
+import SentView from './pages/SentView.jsx';
+import DraftsView from './pages/DraftsView.jsx';
+import StarredView from './pages/StarredView.jsx';
 import SendersManager from './pages/SendersManager.jsx';
 import SequenceList from './pages/SequenceList.jsx';
 import SequenceDetail from './pages/SequenceDetail.jsx';
@@ -15,6 +18,9 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<Navigate to="/inbox" replace />} />
         <Route path="/inbox" element={<InboxView />} />
+        <Route path="/sent" element={<SentView />} />
+        <Route path="/drafts" element={<DraftsView />} />
+        <Route path="/starred" element={<StarredView />} />
         <Route path="/senders" element={<SendersManager />} />
         <Route path="/sequences" element={<SequenceList />} />
         <Route path="/sequences/new" element={<SequenceDetail />} />

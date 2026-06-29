@@ -1,9 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, createContext } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import ComposeModal from '../pages/ComposeModal.jsx';
 
+export const ComposeContext = createContext(null);
+
 const NAV = [
   { to: '/inbox',       label: 'Inbox',       icon: '✉' },
+  { to: '/sent',        label: 'Sent',        icon: '↑' },
+  { to: '/drafts',      label: 'Drafts',      icon: '✎' },
+  { to: '/starred',     label: 'Starred',     icon: '★' },
   { to: '/sequences',   label: 'Sequences',   icon: '◈' },
   { to: '/templates',   label: 'Templates',   icon: '⊟' },
   { to: '/enrollments', label: 'Enrollments', icon: '◷' },
@@ -102,10 +107,18 @@ export default function Layout() {
   const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [composeDraft, setComposeDraft] = useState(null);
+  const [onDraftSavedCb, setOnDraftSavedCb] = useState(null);
   const isMobile = useIsMobile();
+
+  const openCompose = useCallback((draft = null, onDraftSaved = null) => {
+    setComposeDraft(draft || null);
+    setOnDraftSavedCb(() => onDraftSaved);
+    setComposeOpen(true);
+  }, []);
   const navigate = useNavigate();
   const location = useLocation();
-  const isInbox = location.pathname.startsWith('/inbox');
+  const isInbox = location.pathname.startsWith('/inbox') || location.pathname.startsWith('/sent');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
@@ -118,6 +131,7 @@ export default function Layout() {
 
   if (isMobile) {
     return (
+      <ComposeContext.Provider value={openCompose}>
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Mobile top bar */}
         <header style={{
@@ -158,7 +172,7 @@ export default function Layout() {
           transform: drawerOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform .22s ease',
         }}>
-          <SidebarContent onNav={closeDrawer} dark={dark} setDark={setDark} navigate={navigate} onCompose={() => setComposeOpen(true)} />
+          <SidebarContent onNav={closeDrawer} dark={dark} setDark={setDark} navigate={navigate} onCompose={() => openCompose()} />
         </aside>
 
         {/* Page content */}
@@ -173,13 +187,15 @@ export default function Layout() {
         }}>
           <Outlet />
         </main>
-        {composeOpen && <ComposeModal onClose={() => setComposeOpen(false)} />}
+        {composeOpen && <ComposeModal draft={composeDraft} onDraftSaved={onDraftSavedCb} onClose={() => { setComposeOpen(false); setComposeDraft(null); }} />}
       </div>
+      </ComposeContext.Provider>
     );
   }
 
   // Desktop layout
   return (
+    <ComposeContext.Provider value={openCompose}>
     <div style={{ display: 'flex', height: '100%' }}>
       <aside style={{
         width: 'var(--sidebar-w)',
@@ -188,7 +204,7 @@ export default function Layout() {
         display: 'flex', flexDirection: 'column',
         flexShrink: 0, padding: '1.5rem 0',
       }}>
-        <SidebarContent dark={dark} setDark={setDark} navigate={navigate} onCompose={() => setComposeOpen(true)} />
+        <SidebarContent dark={dark} setDark={setDark} navigate={navigate} onCompose={() => openCompose()} />
       </aside>
       <main style={{
         flex: 1,
@@ -200,7 +216,8 @@ export default function Layout() {
       }}>
         <Outlet />
       </main>
-      {composeOpen && <ComposeModal onClose={() => setComposeOpen(false)} />}
+      {composeOpen && <ComposeModal draft={composeDraft} onDraftSaved={onDraftSavedCb} onClose={() => { setComposeOpen(false); setComposeDraft(null); }} />}
     </div>
+    </ComposeContext.Provider>
   );
 }

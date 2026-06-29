@@ -97,6 +97,20 @@ export const api = {
       if (params.offset) q.set('offset', String(params.offset));
       return call(`/sent-emails${q.toString() ? '?' + q : ''}`);
     },
+    getSent: (id) => call(`/sent-emails/${id}`),
+    starSent: (id) => call(`/sent-emails/${id}/star`, { method: 'PUT' }),
+    unstarSent: (id) => call(`/sent-emails/${id}/star`, { method: 'DELETE' }),
+  },
+  drafts: {
+    list: () => call('/drafts'),
+    create: (body) => call('/drafts', { method: 'POST', body: JSON.stringify(body) }),
+    update: (id, body) => call(`/drafts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    delete: (id) => call(`/drafts/${id}`, { method: 'DELETE' }),
+  },
+  starred: {
+    list: () => call('/starred'),
+    starInbox: (id) => call(`/inbox/${id}/star`, { method: 'PUT' }),
+    unstarInbox: (id) => call(`/inbox/${id}/star`, { method: 'DELETE' }),
   },
   diag: () => call('/diag'),
 };
