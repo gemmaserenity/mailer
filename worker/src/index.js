@@ -82,9 +82,14 @@ async function sendViaResend(env, { to, cc, bcc, subject, html, fromName, fromEm
 
 const WORKER_BASE = 'https://mailer-worker.gemma-serenity.workers.dev';
 
-function buildFooterHtml(businessName, physicalAddress, unsubscribeToken) {
+function buildFooterHtml(businessName, physicalAddress, unsubscribeToken, customFooterHtml) {
   if (!unsubscribeToken) return '';
   const url = `${WORKER_BASE}/unsubscribe?t=${unsubscribeToken}`;
+
+  if (customFooterHtml) {
+    return customFooterHtml.replace(/\{\{unsubscribe_url\}\}/g, url);
+  }
+
   const year = new Date().getFullYear();
   const addr = physicalAddress ? ` &middot; ${physicalAddress}` : '';
   return [
@@ -574,6 +579,7 @@ async function createSender(env, request) {
       email: body.email.toLowerCase().trim(),
       resend_api_key: body.resend_api_key.trim(),
       domain: body.domain?.trim() || null,
+      footer_html: body.footer_html?.trim() || null,
       active: true,
     }),
   });
@@ -1004,9 +1010,9 @@ export class MailerWorkflow extends WorkflowEntrypoint {
       const rows = await sb(this.env, `mailer_sequences?id=eq.${sequenceId}&select=from_name,from_email&limit=1`);
       const seq = rows?.[0] || {};
       if (seq.from_email) {
-        const sRows = await sb(this.env, `mailer_senders?email=eq.${encodeURIComponent(seq.from_email)}&select=name,business_name,physical_address&limit=1`);
+        const sRows = await sb(this.env, `mailer_senders?email=eq.${encodeURIComponent(seq.from_email)}&select=name,business_name,physical_address,footer_html&limit=1`);
         const s = sRows?.[0] || {};
-        return { ...seq, business_name: s.business_name || s.name || '', physical_address: s.physical_address || '' };
+        return { ...seq, business_name: s.business_name || s.name || '', physical_address: s.physical_address || '', footer_html: s.footer_html || null };
       }
       return seq;
     });
@@ -1047,6 +1053,7 @@ export class MailerWorkflow extends WorkflowEntrypoint {
             seqMeta.business_name || seqMeta.from_name || '',
             seqMeta.physical_address || '',
             enrollment.unsubscribe_token,
+            seqMeta.footer_html || null,
           );
           const html = baseHtml + footer;
           const idempotencyKey = `enroll-${enrollmentId}-step-${seqStep.id}`;

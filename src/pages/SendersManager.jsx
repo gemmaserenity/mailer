@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api.js';
 
-const EMPTY = { name: '', email: '', resend_api_key: '', domain: '', business_name: '', physical_address: '' };
+const EMPTY = { name: '', email: '', resend_api_key: '', domain: '', business_name: '', physical_address: '', footer_html: '' };
 
 function maskKey(key) {
   if (!key || key.length < 10) return key || '—';
@@ -60,6 +60,7 @@ export default function SendersManager() {
       name: sender.name || '',
       business_name: sender.business_name || '',
       physical_address: sender.physical_address || '',
+      footer_html: sender.footer_html || '',
     });
   }
 
@@ -130,6 +131,10 @@ export default function SendersManager() {
                 <label>Physical Address <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 11 }}>(required by CAN-SPAM)</span></label>
                 <input value={form.physical_address} onChange={field('physical_address')} placeholder="123 Main St, City, State 00000" />
               </div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <label>Custom Footer HTML <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 11 }}>(optional — overrides auto-generated CAN-SPAM footer; use <code>{'{{unsubscribe_url}}'}</code> for the unsubscribe link)</span></label>
+                <textarea value={form.footer_html} onChange={field('footer_html')} placeholder={'<div style="text-align:center;font-size:12px;color:#999">© 2025 My Brand &middot; <a href="{{unsubscribe_url}}">Unsubscribe</a></div>'} rows={4} style={{ fontFamily: 'Courier New, monospace', fontSize: 12 }} />
+              </div>
             </div>
             <div className="row mt-1">
               <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Adding…' : 'Add Sender'}</button>
@@ -166,6 +171,10 @@ export default function SendersManager() {
                     <label style={LABEL}>Physical Address <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 11 }}>(shown in email footer — required by CAN-SPAM)</span></label>
                     <input value={editForm.physical_address} onChange={editField('physical_address')} placeholder="123 Main St, City, State 00000" />
                   </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={LABEL}>Custom Footer HTML <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 11 }}>(optional — overrides auto-generated footer; use <code>{'{{unsubscribe_url}}'}</code>)</span></label>
+                    <textarea value={editForm.footer_html} onChange={editField('footer_html')} rows={4} style={{ fontFamily: 'Courier New, monospace', fontSize: 12, width: '100%' }} placeholder={'<div style="text-align:center;font-size:12px;color:#999">© 2025 My Brand &middot; <a href="{{unsubscribe_url}}">Unsubscribe</a></div>'} />
+                  </div>
                 </div>
                 <div className="row">
                   <button type="submit" className="btn-primary btn-sm" disabled={editSaving}>{editSaving ? 'Saving…' : 'Save'}</button>
@@ -198,7 +207,7 @@ export default function SendersManager() {
                       </button>
                     </span>
                   </div>
-                  {(sender.business_name || sender.physical_address) && (
+                  {(sender.business_name || sender.physical_address || sender.footer_html) && (
                     <div style={{ marginTop: '.4rem', fontSize: 12, color: 'var(--text-xmuted)', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                       {sender.business_name && <span>🏢 {sender.business_name}</span>}
                       {sender.physical_address && (
@@ -207,9 +216,12 @@ export default function SendersManager() {
                           {sender.physical_address}
                         </span>
                       )}
+                      {sender.footer_html && (
+                        <span style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}>✦ Custom footer</span>
+                      )}
                     </div>
                   )}
-                  {!sender.physical_address && (
+                  {!sender.physical_address && !sender.footer_html && (
                     <div style={{ marginTop: '.35rem', fontSize: 11, color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
                       ⚠ Physical address missing — required for CAN-SPAM compliance in sequence emails
                     </div>
