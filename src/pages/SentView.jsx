@@ -28,7 +28,6 @@ export default function SentView() {
   const [messages, setMessages] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMsg, setLoadingMsg] = useState(false);
   const [error, setError] = useState(null);
   const isMobile = useIsMobile();
 
@@ -45,12 +44,6 @@ export default function SentView() {
 
   async function openMessage(msg) {
     setSelected(msg);
-    if (!msg.body_html && !msg.body_text) {
-      setLoadingMsg(true);
-      try { setSelected(await api.compose.getSent(msg.id)); }
-      catch {}
-      finally { setLoadingMsg(false); }
-    }
   }
 
   async function toggleStar(msg, e) {
@@ -162,9 +155,7 @@ export default function SentView() {
 
           <hr style={{ border: 'none', borderTop: '1.5px solid var(--border)', margin: 0 }} />
 
-          {loadingMsg ? (
-            <div className="loading">Loading…</div>
-          ) : selected.body_html ? (
+          {selected.body_html ? (
             <div style={{ fontSize: 15, lineHeight: 1.65 }} dangerouslySetInnerHTML={{ __html: selected.body_html }} />
           ) : (
             <pre style={{ fontFamily: 'inherit', whiteSpace: 'pre-wrap', margin: 0, fontSize: 15, lineHeight: 1.65 }}>
