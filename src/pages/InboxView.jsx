@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, fmtDateTime } from '../lib/api.js';
+import { useResizablePanel } from '../hooks/useResizablePanel.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || '';
 const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || '';
@@ -61,6 +62,7 @@ export default function InboxView() {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isMobile = useIsMobile();
+  const { width: listWidth, collapsed: listCollapsed, dragging, toggle: toggleList, startResize } = useResizablePanel('mailer_inbox_list', 300);
   const perPage = parseInt(localStorage.getItem('mailer_per_page') || '50', 10);
 
   useEffect(() => { api.senders.list().then(setSenders).catch(() => {}); }, []);
@@ -186,12 +188,21 @@ export default function InboxView() {
     cursor: 'pointer', transition: 'all .12s', whiteSpace: 'nowrap',
   });
 
+  const HANDLE = {
+    width: 5, flexShrink: 0, cursor: 'col-resize',
+    background: 'transparent', transition: 'background .12s',
+    zIndex: 1,
+  };
+
   const MessageList = (
     <div style={{
-      width: isMobile ? '100%' : 300, flexShrink: 0,
+      width: isMobile ? '100%' : listWidth,
+      minWidth: isMobile ? undefined : listWidth,
+      flexShrink: 0,
       borderRight: isMobile ? 'none' : '1.5px solid var(--border)',
       display: 'flex', flexDirection: 'column', background: 'var(--surface)',
       overflow: 'hidden', height: '100%',
+      transition: dragging ? 'none' : 'width 0.15s ease, min-width 0.15s ease',
     }}>
       <div style={{ padding: '1rem 1.25rem', borderBottom: '1.5px solid var(--border)', flexShrink: 0 }}>
         <div className="row-between" style={{ marginBottom: '.6rem' }}>
@@ -203,6 +214,7 @@ export default function InboxView() {
               </span>
             )}
             <button onClick={loadMessages} style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: 'var(--text-muted)', padding: '.2rem .4rem', borderRadius: 'var(--radius)' }} title="Refresh">↺</button>
+            {!isMobile && <button onClick={toggleList} title="Collapse list" style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: 'var(--text-muted)', padding: '.2rem .4rem', borderRadius: 'var(--radius)' }}>‹</button>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: '.35rem', overflowX: 'auto', paddingBottom: '.25rem', scrollbarWidth: 'none' }}>
@@ -390,7 +402,27 @@ export default function InboxView() {
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      {isMobile ? (selectedMsg ? MessageContent : MessageList) : <>{MessageList}{MessageContent}</>}
+      {isMobile ? (
+        selectedMsg ? MessageContent : MessageList
+      ) : listCollapsed ? (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', padding: '.75rem .25rem', background: 'var(--surface)', borderRight: '1.5px solid var(--border)', flexShrink: 0 }}>
+            <button onClick={toggleList} title="Expand list" style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '.3rem', borderRadius: 'var(--radius)' }}>›</button>
+          </div>
+          {MessageContent}
+        </>
+      ) : (
+        <>
+          {MessageList}
+          <div
+            onMouseDown={startResize}
+            style={HANDLE}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--accent)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          />
+          {MessageContent}
+        </>
+      )}
     </div>
   );
 }

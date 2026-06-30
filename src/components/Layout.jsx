@@ -13,6 +13,7 @@ const NAV = [
   { to: '/templates',   label: 'Templates',   icon: '⊟' },
   { to: '/enrollments', label: 'Enrollments', icon: '◷' },
   { to: '/senders',     label: 'Senders',     icon: '⊙' },
+  { to: '/settings',    label: 'Settings',    icon: '⚙' },
 ];
 
 function useIsMobile() {
@@ -25,80 +26,105 @@ function useIsMobile() {
   return mobile;
 }
 
-function SidebarContent({ onNav, dark, setDark, navigate, onCompose }) {
+function readBranding() {
+  return {
+    appName: localStorage.getItem('mailer_app_name') || 'Email Sequence Engine',
+    appLogoUrl: localStorage.getItem('mailer_app_logo_url') || '',
+  };
+}
+
+function SidebarContent({ collapsed: sc, onNav, dark, setDark, onCollapse, onCompose, branding }) {
+  function navStyle({ isActive }) {
+    return {
+      display: 'flex',
+      alignItems: 'center',
+      gap: sc ? 0 : '.6rem',
+      padding: sc ? '.5rem 0' : '.5rem .75rem',
+      justifyContent: sc ? 'center' : 'flex-start',
+      borderRadius: 'var(--radius)',
+      textDecoration: 'none',
+      fontSize: '15px',
+      fontWeight: isActive ? 600 : 400,
+      color: isActive ? 'var(--text)' : 'var(--text-muted)',
+      background: isActive ? 'var(--surface-2)' : 'transparent',
+      transition: 'background .12s, color .12s',
+    };
+  }
+
   return (
     <>
-      <div style={{ padding: '0 1.25rem 1.5rem', borderBottom: '1.5px solid var(--border)' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', fontWeight: 600, lineHeight: 1.2 }}>
-          Email Sequence<br />Engine
+      {/* Header: branding + controls */}
+      <div style={{
+        padding: sc ? '.75rem .5rem' : '0 1rem 1rem',
+        borderBottom: '1.5px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: sc ? 'center' : 'space-between',
+        gap: '.4rem',
+        flexShrink: 0,
+      }}>
+        {!sc && (
+          <div style={{ minWidth: 0, flex: 1 }}>
+            {branding.appLogoUrl ? (
+              <img
+                src={branding.appLogoUrl}
+                alt={branding.appName}
+                style={{ height: 28, maxWidth: 140, objectFit: 'contain', display: 'block' }}
+              />
+            ) : (
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '.95rem', fontWeight: 600, lineHeight: 1.25 }}>
+                {branding.appName}
+              </div>
+            )}
+          </div>
+        )}
+        {sc && branding.appLogoUrl && (
+          <img src={branding.appLogoUrl} alt="" style={{ height: 26, width: 26, objectFit: 'contain', borderRadius: 4 }} />
+        )}
+        <div style={{ display: 'flex', gap: '.15rem', flexShrink: 0 }}>
+          <button
+            onClick={() => setDark(d => !d)}
+            title={dark ? 'Light mode' : 'Dark mode'}
+            style={{ background: 'none', border: 'none', padding: '.25rem', fontSize: 15, cursor: 'pointer', color: 'var(--text-muted)', borderRadius: 'var(--radius)', lineHeight: 1 }}
+          >{dark ? '☀' : '◐'}</button>
+          <button
+            onClick={onCollapse}
+            title={sc ? 'Expand sidebar' : 'Collapse sidebar'}
+            style={{ background: 'none', border: 'none', padding: '.25rem', fontSize: 15, cursor: 'pointer', color: 'var(--text-muted)', borderRadius: 'var(--radius)', lineHeight: 1 }}
+          >{sc ? '»' : '«'}</button>
         </div>
       </div>
 
-      <nav style={{ flex: 1, padding: '1rem .75rem', display: 'flex', flexDirection: 'column', gap: '.25rem' }}>
+      {/* New Email */}
+      <div style={{ padding: sc ? '.65rem .25rem' : '.75rem .75rem', flexShrink: 0 }}>
+        <button
+          onClick={() => { onCompose?.(); onNav?.(); }}
+          className="btn-primary"
+          title="New Email"
+          style={{
+            width: '100%', fontSize: '13px',
+            padding: sc ? '.45rem 0' : '.4rem .8rem',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.4rem',
+          }}
+        >
+          <span>✉</span>
+          {!sc && <span>New Email</span>}
+        </button>
+      </div>
+
+      {/* Nav */}
+      <nav style={{
+        flex: 1, padding: sc ? '.25rem .2rem' : '.25rem .5rem',
+        display: 'flex', flexDirection: 'column', gap: '.1rem',
+        overflowY: 'auto',
+      }}>
         {NAV.map(({ to, label, icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            onClick={onNav}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '.6rem',
-              padding: '.55rem .75rem',
-              borderRadius: 'var(--radius)',
-              textDecoration: 'none',
-              fontSize: '15px',
-              fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--text)' : 'var(--text-muted)',
-              background: isActive ? 'var(--surface-2)' : 'transparent',
-              transition: 'background .12s, color .12s',
-            })}
-          >
-            <span style={{ fontSize: '16px', opacity: .8 }}>{icon}</span>
-            {label}
+          <NavLink key={to} to={to} onClick={onNav} title={sc ? label : undefined} style={navStyle}>
+            <span style={{ fontSize: '16px', opacity: .8, flexShrink: 0 }}>{icon}</span>
+            {!sc && label}
           </NavLink>
         ))}
       </nav>
-
-      <div style={{ padding: '.75rem 1.25rem', borderTop: '1.5px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: '.35rem' }}>
-          <button
-            onClick={() => { onCompose?.(); onNav?.(); }}
-            className="btn-primary"
-            style={{ fontSize: '13px', padding: '.35rem .8rem' }}
-          >
-            ✉ New Email
-          </button>
-          <button
-            onClick={() => { navigate('/sequences/new'); onNav?.(); }}
-            style={{ fontSize: '13px', padding: '.35rem .8rem', background: 'none', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text-muted)' }}
-          >
-            + Sequence
-          </button>
-        </div>
-        <div style={{ display: 'flex', gap: '.35rem' }}>
-          <NavLink
-            to="/settings"
-            onClick={onNav}
-            style={({ isActive }) => ({
-              background: isActive ? 'var(--surface-2)' : 'var(--surface-2)',
-              border: `1.5px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
-              borderRadius: 'var(--radius)', padding: '.3rem .6rem', fontSize: '15px',
-              textDecoration: 'none', color: 'var(--text)', lineHeight: 1,
-            })}
-            title="Settings"
-          >
-            ⚙
-          </NavLink>
-          <button
-            onClick={() => setDark(d => !d)}
-            style={{ background: 'var(--surface-2)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', padding: '.3rem .6rem', fontSize: '15px' }}
-            title="Toggle dark mode"
-          >
-            {dark ? '☀' : '◐'}
-          </button>
-        </div>
-      </div>
     </>
   );
 }
@@ -109,6 +135,8 @@ export default function Layout() {
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeDraft, setComposeDraft] = useState(null);
   const [onDraftSavedCb, setOnDraftSavedCb] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('mailer_sidebar_c') === '1');
+  const [branding, setBranding] = useState(readBranding);
   const isMobile = useIsMobile();
 
   const openCompose = useCallback((draft = null, onDraftSaved = null) => {
@@ -116,6 +144,7 @@ export default function Layout() {
     setOnDraftSavedCb(() => onDraftSaved);
     setComposeOpen(true);
   }, []);
+
   const navigate = useNavigate();
   const location = useLocation();
   const isInbox = location.pathname.startsWith('/inbox') || location.pathname.startsWith('/sent');
@@ -127,63 +156,68 @@ export default function Layout() {
 
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
 
+  useEffect(() => {
+    localStorage.setItem('mailer_sidebar_c', sidebarCollapsed ? '1' : '0');
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    const handler = () => setBranding(readBranding());
+    window.addEventListener('brandingUpdated', handler);
+    return () => window.removeEventListener('brandingUpdated', handler);
+  }, []);
+
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  const toggleSidebar = useCallback(() => setSidebarCollapsed(c => !c), []);
 
   if (isMobile) {
     return (
       <ComposeContext.Provider value={openCompose}>
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* Mobile top bar */}
         <header style={{
           position: 'fixed', top: 0, left: 0, right: 0, height: 52,
           background: 'var(--surface)', borderBottom: '1.5px solid var(--border)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0 1rem', zIndex: 50, flexShrink: 0,
         }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 600 }}>
-            Email Sequence Engine
-          </span>
+          {branding.appLogoUrl
+            ? <img src={branding.appLogoUrl} alt={branding.appName} style={{ height: 26, objectFit: 'contain' }} />
+            : <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 600 }}>{branding.appName}</span>}
           <button
             onClick={() => setDrawerOpen(o => !o)}
             style={{ background: 'none', border: 'none', fontSize: '22px', padding: '.25rem .4rem', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text)' }}
             aria-label="Menu"
-          >
-            {drawerOpen ? '✕' : '☰'}
-          </button>
+          >{drawerOpen ? '✕' : '☰'}</button>
         </header>
 
-        {/* Drawer overlay */}
         {drawerOpen && (
-          <div
-            onClick={closeDrawer}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 98 }}
-          />
+          <div onClick={closeDrawer} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 98 }} />
         )}
 
-        {/* Slide-in drawer */}
         <aside style={{
           position: 'fixed', top: 0, left: 0, bottom: 0,
           width: '75%', maxWidth: 280,
-          background: 'var(--surface)',
-          borderRight: '1.5px solid var(--border)',
-          display: 'flex', flexDirection: 'column',
-          padding: '1.5rem 0',
+          background: 'var(--surface)', borderRight: '1.5px solid var(--border)',
+          display: 'flex', flexDirection: 'column', padding: '1.25rem 0',
           zIndex: 99,
           transform: drawerOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform .22s ease',
         }}>
-          <SidebarContent onNav={closeDrawer} dark={dark} setDark={setDark} navigate={navigate} onCompose={() => openCompose()} />
+          <SidebarContent
+            collapsed={false}
+            onNav={closeDrawer}
+            dark={dark}
+            setDark={setDark}
+            onCollapse={closeDrawer}
+            onCompose={() => openCompose()}
+            branding={branding}
+          />
         </aside>
 
-        {/* Page content */}
         <main style={{
-          flex: 1,
-          overflowY: isInbox ? 'hidden' : 'auto',
+          flex: 1, overflowY: isInbox ? 'hidden' : 'auto',
           padding: isInbox ? 0 : '1rem',
           paddingTop: isInbox ? '52px' : 'calc(52px + 1rem)',
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: 0,
+          display: 'flex', flexDirection: 'column', minHeight: 0,
         }}>
           <Outlet />
         </main>
@@ -193,26 +227,31 @@ export default function Layout() {
     );
   }
 
-  // Desktop layout
+  // Desktop
   return (
     <ComposeContext.Provider value={openCompose}>
     <div style={{ display: 'flex', height: '100%' }}>
       <aside style={{
-        width: 'var(--sidebar-w)',
-        background: 'var(--surface)',
-        borderRight: '1.5px solid var(--border)',
+        width: sidebarCollapsed ? 52 : 220,
+        transition: 'width 0.18s ease',
+        background: 'var(--surface)', borderRight: '1.5px solid var(--border)',
         display: 'flex', flexDirection: 'column',
-        flexShrink: 0, padding: '1.5rem 0',
+        flexShrink: 0, padding: '1.25rem 0',
+        overflow: 'hidden',
       }}>
-        <SidebarContent dark={dark} setDark={setDark} navigate={navigate} onCompose={() => openCompose()} />
+        <SidebarContent
+          collapsed={sidebarCollapsed}
+          dark={dark}
+          setDark={setDark}
+          onCollapse={toggleSidebar}
+          onCompose={() => openCompose()}
+          branding={branding}
+        />
       </aside>
       <main style={{
-        flex: 1,
-        overflow: isInbox ? 'hidden' : 'auto',
+        flex: 1, overflow: isInbox ? 'hidden' : 'auto',
         padding: isInbox ? 0 : '2rem 2.5rem',
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: 0,
+        display: 'flex', flexDirection: 'column', minHeight: 0,
       }}>
         <Outlet />
       </main>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, fmtDateTime } from '../lib/api.js';
+import { useResizablePanel } from '../hooks/useResizablePanel.js';
 
 function fmtSize(bytes) {
   if (!bytes) return '';
@@ -31,6 +32,7 @@ export default function SentView() {
   const [loadingMsg, setLoadingMsg] = useState(false);
   const [error, setError] = useState(null);
   const isMobile = useIsMobile();
+  const { width: listWidth, collapsed: listCollapsed, dragging, toggle: toggleList, startResize } = useResizablePanel('mailer_sent_list', 300);
 
   useEffect(() => { load(); }, []);
 
@@ -66,17 +68,28 @@ export default function SentView() {
     } catch {}
   }
 
+  const HANDLE = {
+    width: 5, flexShrink: 0, cursor: 'col-resize',
+    background: 'transparent', transition: 'background .12s', zIndex: 1,
+  };
+
   const MessageList = (
     <div style={{
-      width: isMobile ? '100%' : 300, flexShrink: 0,
+      width: isMobile ? '100%' : listWidth,
+      minWidth: isMobile ? undefined : listWidth,
+      flexShrink: 0,
       borderRight: isMobile ? 'none' : '1.5px solid var(--border)',
       display: 'flex', flexDirection: 'column',
       background: 'var(--surface)', overflow: 'hidden', height: '100%',
+      transition: dragging ? 'none' : 'width 0.15s ease, min-width 0.15s ease',
     }}>
       <div style={{ padding: '1rem 1.25rem', borderBottom: '1.5px solid var(--border)', flexShrink: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Sent</h2>
-          <button onClick={load} style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: 'var(--text-muted)', padding: '.2rem .4rem', borderRadius: 'var(--radius)' }} title="Refresh">↺</button>
+          <div style={{ display: 'flex', gap: '.25rem' }}>
+            <button onClick={load} style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: 'var(--text-muted)', padding: '.2rem .4rem', borderRadius: 'var(--radius)' }} title="Refresh">↺</button>
+            {!isMobile && <button onClick={toggleList} title="Collapse list" style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: 'var(--text-muted)', padding: '.2rem .4rem', borderRadius: 'var(--radius)' }}>‹</button>}
+          </div>
         </div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -199,7 +212,27 @@ export default function SentView() {
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      {isMobile ? (selected ? MessageContent : MessageList) : <>{MessageList}{MessageContent}</>}
+      {isMobile ? (
+        selected ? MessageContent : MessageList
+      ) : listCollapsed ? (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', padding: '.75rem .25rem', background: 'var(--surface)', borderRight: '1.5px solid var(--border)', flexShrink: 0 }}>
+            <button onClick={toggleList} title="Expand list" style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)', padding: '.3rem', borderRadius: 'var(--radius)' }}>›</button>
+          </div>
+          {MessageContent}
+        </>
+      ) : (
+        <>
+          {MessageList}
+          <div
+            onMouseDown={startResize}
+            style={HANDLE}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--accent)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          />
+          {MessageContent}
+        </>
+      )}
     </div>
   );
 }

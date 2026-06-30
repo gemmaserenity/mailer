@@ -3,6 +3,8 @@ import { api } from '../lib/api.js';
 
 export default function Settings() {
   const [senders, setSenders] = useState([]);
+  const [appName, setAppName] = useState(() => localStorage.getItem('mailer_app_name') || 'Email Sequence Engine');
+  const [appLogoUrl, setAppLogoUrl] = useState(() => localStorage.getItem('mailer_app_logo_url') || '');
   const [defaultSender, setDefaultSender] = useState(() => localStorage.getItem('mailer_default_sender') || '');
   const [signature, setSignature] = useState(() => localStorage.getItem('mailer_signature') || '');
   const [perPage, setPerPage] = useState(() => localStorage.getItem('mailer_per_page') || '50');
@@ -11,9 +13,12 @@ export default function Settings() {
   useEffect(() => { api.senders.list().then(setSenders).catch(() => {}); }, []);
 
   function save() {
+    localStorage.setItem('mailer_app_name', appName.trim() || 'Email Sequence Engine');
+    localStorage.setItem('mailer_app_logo_url', appLogoUrl.trim());
     localStorage.setItem('mailer_default_sender', defaultSender);
     localStorage.setItem('mailer_signature', signature);
     localStorage.setItem('mailer_per_page', perPage);
+    window.dispatchEvent(new CustomEvent('brandingUpdated'));
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
@@ -25,6 +30,42 @@ export default function Settings() {
       </h1>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+
+        <section>
+          <h2 style={{ fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-xmuted)', marginBottom: '1rem' }}>
+            Branding
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div>
+              <label>App name</label>
+              <input
+                value={appName}
+                onChange={e => setAppName(e.target.value)}
+                placeholder="Email Sequence Engine"
+              />
+              <p style={{ fontSize: 13, color: 'var(--text-xmuted)', marginTop: '.35rem', lineHeight: 1.5 }}>
+                Shown in the sidebar and mobile header. Takes effect immediately after saving.
+              </p>
+            </div>
+            <div>
+              <label>Logo URL</label>
+              <input
+                value={appLogoUrl}
+                onChange={e => setAppLogoUrl(e.target.value)}
+                placeholder="https://example.com/logo.png"
+              />
+              {appLogoUrl.trim() && (
+                <div style={{ marginTop: '.5rem', display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                  <img src={appLogoUrl.trim()} alt="Logo preview" style={{ height: 32, maxWidth: 180, objectFit: 'contain', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 4, background: 'var(--surface)' }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-xmuted)' }}>Preview</span>
+                </div>
+              )}
+              <p style={{ fontSize: 13, color: 'var(--text-xmuted)', marginTop: '.35rem', lineHeight: 1.5 }}>
+                Replaces the app name text in the sidebar. Leave empty to show text instead.
+              </p>
+            </div>
+          </div>
+        </section>
 
         <section>
           <h2 style={{ fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-xmuted)', marginBottom: '1rem' }}>
