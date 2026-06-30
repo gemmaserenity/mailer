@@ -1045,8 +1045,112 @@ async function handleSendEmail(env, request) {
 async function listSentEmails(env, url) {
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
   const offset = parseInt(url.searchParams.get('offset') || '0', 10);
-  const data = await sb(env, `mailer_sent_emails?select=id,from_email,from_name,to_addresses,cc,subject,sent_at,resend_id&order=sent_at.desc&limit=${limit}&offset=${offset}`);
+  const data = await sb(env, `mailer_sent_emails?select=id,from_email,from_name,to_addresses,cc,bcc,subject,preview_text,body_html,body_text,attachments,starred,sent_at,resend_id&order=sent_at.desc&limit=${limit}&offset=${offset}`);
   return json(data || []);
+}
+
+// ============================================================
+// DRAFTS
+// ============================================================
+
+async function listDrafts(env) {
+  const data = await sb(env, 'mailer_drafts?select=id,sender_id,from_name,to_addresses,subject,updated_at&order=updated_at.desc&limit=100');
+  return json(data || []);
+}
+
+async function createDraft(env, request) {
+  const body = await request.json();
+  const data = await sb(env, 'mailer_drafts', {
+    method: 'POST',
+    body: JSON.stringify({
+      sender_id: body.sender_id || null,
+      from_name: body.from_name || null,
+      to_addresses: body.to || [],
+      cc: body.cc || [],
+      bcc: body.bcc || [],
+      subject: body.subject || null,
+      preview_text: body.preview_text || null,
+      body_text: body.body_text || null,
+      body_html: body.body_html || null,
+      use_html: body.use_html || false,
+      attachments: body.attachments || [],
+    }),
+  });
+  return json(Array.isArray(data) ? data[0] : data, 201);
+}
+
+async function updateDraft(env, id, request) {
+  const body = await request.json();
+  const data = await sb(env, `mailer_drafts?id=eq.${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      sender_id: body.sender_id || null,
+      from_name: body.from_name || null,
+      to_addresses: body.to || [],
+      cc: body.cc || [],
+      bcc: body.bcc || [],
+      subject: body.subject || null,
+      preview_text: body.preview_text || null,
+      body_text: body.body_text || null,
+      body_html: body.body_html || null,
+      use_html: body.use_html || false,
+      attachments: body.attachments || [],
+      updated_at: new Date().toISOString(),
+    }),
+  });
+  return json(Array.isArray(data) ? data[0] : data);
+}
+
+async function deleteDraft(env, id) {
+  await sb(env, `mailer_drafts?id=eq.${id}`, { method: 'DELETE', prefer: 'return=minimal' });
+  return json({ deleted: true });
+}
+
+// ============================================================
+// STAR / UNSTAR
+// ============================================================
+
+async function starInboxMessage(env, id, starred) {
+  await sb(env, `mailer_inbox?id=eq.${id}`, {
+    method: 'PATCH',
+    prefer: 'return=minimal',
+    body: JSON.stringify({ starred }),
+  });
+  return json({ starred });
+}
+
+async function starSentEmail(env, id, starred) {
+  await sb(env, `mailer_sent_emails?id=eq.${id}`, {
+    method: 'PATCH',
+    prefer: 'return=minimal',
+    body: JSON.stringify({ starred }),
+  });
+  return json({ starred });
+}
+
+// ============================================================
+// STARRED — combined inbox + sent starred items
+// ============================================================
+
+async function listStarred(env) {
+  const [inboxRows, sentRows] = await Promise.all([
+    sb(env, 'mailer_inbox?starred=eq.true&select=id,from_email,from_name,subject,received_at,read,archived&order=received_at.desc&limit=100'),
+    sb(env, 'mailer_sent_emails?starred=eq.true&select=id,from_email,from_name,to_addresses,subject,sent_at&order=sent_at.desc&limit=100'),
+  ]);
+  const inbox = (inboxRows || []).map(r => ({ ...r, _type: 'inbox', date: r.received_at }));
+  const sent  = (sentRows  || []).map(r => ({ ...r, _type: 'sent',  date: r.sent_at }));
+  const merged = [...inbox, ...sent].sort((a, b) => new Date(b.date) - new Date(a.date));
+  return json(merged);
+}
+
+// ============================================================
+// SENT EMAIL DETAIL
+// ============================================================
+
+async function getSentEmail(env, id) {
+  const rows = await sb(env, `mailer_sent_emails?id=eq.${id}&limit=1`);
+  if (!rows?.length) return json({ error: 'not found' }, 404);
+  return json(rows[0]);
 }
 
 // ============================================================
@@ -1222,6 +1326,26 @@ export default {
       if (path === '/send-email' && method === 'POST') return handleSendEmail(env, request);
       if (path === '/sent-emails' && method === 'GET') return listSentEmails(env, url);
 
+      // --- Sent email detail + star ---
+      const sentMatch = path.match(/^\/sent-emails\/([\w-]+)$/);
+      if (sentMatch && method === 'GET') return getSentEmail(env, sentMatch[1]);
+      const sentStarMatch = path.match(/^\/sent-emails\/([\w-]+)\/star$/);
+      if (sentStarMatch && method === 'PUT') return starSentEmail(env, sentStarMatch[1], true);
+      if (sentStarMatch && method === 'DELETE') return starSentEmail(env, sentStarMatch[1], false);
+
+      // --- Drafts ---
+      if (path === '/drafts' && method === 'GET') return listDrafts(env);
+      if (path === '/drafts' && method === 'POST') return createDraft(env, request);
+      const draftMatch = path.match(/^\/drafts\/([\w-]+)$/);
+      if (draftMatch) {
+        const id = draftMatch[1];
+        if (method === 'PATCH') return updateDraft(env, id, request);
+        if (method === 'DELETE') return deleteDraft(env, id);
+      }
+
+      // --- Starred ---
+      if (path === '/starred' && method === 'GET') return listStarred(env);
+
       // --- Attachments ---
       if (path === '/attachments' && method === 'GET') {
         const key = url.searchParams.get('key');
@@ -1244,6 +1368,9 @@ export default {
       if (inboxReplyMatch && method === 'POST') return replyToInbox(env, inboxReplyMatch[1], request);
       const inboxReadMatch = path.match(/^\/inbox\/([\w-]+)\/read$/);
       if (inboxReadMatch && method === 'PUT') return markInboxRead(env, inboxReadMatch[1]);
+      const inboxStarMatch = path.match(/^\/inbox\/([\w-]+)\/star$/);
+      if (inboxStarMatch && method === 'PUT') return starInboxMessage(env, inboxStarMatch[1], true);
+      if (inboxStarMatch && method === 'DELETE') return starInboxMessage(env, inboxStarMatch[1], false);
       const inboxArchiveMatch = path.match(/^\/inbox\/([\w-]+)\/archive$/);
       if (inboxArchiveMatch && method === 'PUT') return archiveInboxMessage(env, inboxArchiveMatch[1], true);
       if (inboxArchiveMatch && method === 'DELETE') return archiveInboxMessage(env, inboxArchiveMatch[1], false);
