@@ -743,13 +743,9 @@ async function processRawInbound(env, { raw, to, fromRaw }) {
     const parsed = await new PostalMime().parse(bytes.buffer);
 
     const toAddress = (to || '').toLowerCase();
-    let fromEmail = fromRaw || '';
-    let fromName = parsed.from?.name || null;
-    const nameMatch = fromRaw?.match(/^(.+?)\s*<([^>]+)>$/);
-    if (nameMatch) {
-      fromName = nameMatch[1].trim();
-      fromEmail = nameMatch[2].trim();
-    }
+    // Same fix as email() handler: use PostalMime's parsed From, not the envelope sender
+    const fromEmail = (parsed.from?.address || fromRaw || '').toLowerCase();
+    const fromName = parsed.from?.name || null;
 
     const senderRows = await sb(env, `mailer_senders?email=eq.${encodeURIComponent(toAddress)}&select=id,email&limit=1`);
     const sender = senderRows?.[0] || null;
@@ -1560,14 +1556,10 @@ export default {
         const parsed = await new PostalMime().parse(rawEmail);
 
         const toAddress = (message.to || '').toLowerCase();
-        const fromRaw = message.from || '';
-        let fromEmail = fromRaw;
-        let fromName = parsed.from?.name || null;
-        const nameMatch = fromRaw.match(/^(.+?)\s*<([^>]+)>$/);
-        if (nameMatch) {
-          fromName = nameMatch[1].trim();
-          fromEmail = nameMatch[2].trim();
-        }
+        // Use PostalMime's parsed From header — message.from is the envelope sender (Return-Path)
+        // which Resend rewrites to a bounce-tracking address and must not be used as from_email
+        const fromEmail = (parsed.from?.address || message.from || '').toLowerCase();
+        const fromName = parsed.from?.name || null;
 
         const senderRows = await sb(env, `mailer_senders?email=eq.${encodeURIComponent(toAddress)}&select=id,email&limit=1`);
         const sender = senderRows?.[0] || null;
