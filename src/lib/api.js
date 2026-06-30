@@ -112,6 +112,9 @@ export const api = {
     starInbox: (id) => call(`/inbox/${id}/star`, { method: 'PUT' }),
     unstarInbox: (id) => call(`/inbox/${id}/star`, { method: 'DELETE' }),
   },
+  ai: {
+    write: (body) => call('/ai-write', { method: 'POST', body: JSON.stringify(body) }),
+  },
   diag: () => call('/diag'),
 };
 

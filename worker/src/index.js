@@ -1371,6 +1371,52 @@ async function handlePublicSubscribe(env, request, ctx) {
   return json({ success: true }, 200);
 }
 
+// ============================================================
+// AI WRITING
+// ============================================================
+
+async function handleAiWrite(env, request) {
+  if (!env.ANTHROPIC_API_KEY) {
+    return json({ error: 'AI writing not configured — add ANTHROPIC_API_KEY to worker environment' }, 500);
+  }
+  const { prompt, subject, from_name, mode } = await request.json();
+  if (!prompt?.trim()) return json({ error: 'prompt is required' }, 400);
+
+  const isHtml = mode === 'html';
+  const systemPrompt = isHtml
+    ? `You are an expert email copywriter. Write only the inner HTML body content for an email — no <html>, <head>, or <body> tags. Just the content that goes inside <body>. Use clean inline styles compatible with email clients. Do not include a subject line or "Subject:" prefix.`
+    : `You are an expert email copywriter. Write a clear email body as plain text. No subject line, no "Subject:" prefix. Just the body, starting directly with the opening line.`;
+
+  const contextLines = [
+    subject && `Subject context: ${subject}`,
+    from_name && `Sender name: ${from_name}`,
+    `\nWrite this email:\n${prompt.trim()}`,
+  ].filter(Boolean).join('\n');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: contextLines }],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    return json({ error: `Anthropic API error: ${err}` }, 500);
+  }
+
+  const data = await res.json();
+  return json({ body: data.content?.[0]?.text || '' });
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return corsOk();
@@ -1480,6 +1526,9 @@ export default {
         if (method === 'DELETE') return deleteSender(env, id);
       }
 
+      // --- AI writing ---
+      if (path === '/ai-write' && method === 'POST') return handleAiWrite(env, request);
+
       // --- Compose (ad-hoc send) ---
       if (path === '/send-email' && method === 'POST') return handleSendEmail(env, request);
       if (path === '/sent-emails' && method === 'GET') return listSentEmails(env, url);
@@ -1544,6 +1593,7 @@ export default {
       return json({ error: String(e) }, 500);
     }
   },
+
 
   // ============================================================
   // CLOUDFLARE EMAIL ROUTING handler — receives raw inbound email

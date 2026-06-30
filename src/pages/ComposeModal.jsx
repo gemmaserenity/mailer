@@ -1,6 +1,100 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../lib/api.js';
 
+function AiWritePanel({ subject, fromName, mode, onAccept, onClose }) {
+  const [prompt, setPrompt] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [preview, setPreview] = useState('');
+  const [error, setError] = useState(null);
+  const taRef = useRef(null);
+
+  useEffect(() => { taRef.current?.focus(); }, []);
+
+  async function generate() {
+    if (!prompt.trim()) return;
+    setGenerating(true);
+    setError(null);
+    setPreview('');
+    try {
+      const res = await api.ai.write({ prompt: prompt.trim(), subject, from_name: fromName, mode });
+      setPreview(res.body || '');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generate();
+  }
+
+  return (
+    <div style={{
+      background: 'var(--surface-2)', border: '1.5px solid var(--accent)',
+      borderRadius: 'var(--radius)', padding: '1rem', marginBottom: '.75rem',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', letterSpacing: '.04em' }}>✦ AI WRITING</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '.1rem .3rem', lineHeight: 1 }}>✕</button>
+      </div>
+
+      <textarea
+        ref={taRef}
+        value={prompt}
+        onChange={e => setPrompt(e.target.value)}
+        onKeyDown={handleKey}
+        placeholder={'Describe what this email should say…\ne.g. "Follow-up on our coaching call last week, warm tone, remind her about the free resource I mentioned"'}
+        rows={3}
+        style={{ ...FIELD, resize: 'vertical', marginBottom: '.5rem', fontSize: 13 }}
+      />
+
+      <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
+        <button
+          onClick={generate}
+          disabled={generating || !prompt.trim()}
+          className="btn-primary"
+          style={{ fontSize: 13, padding: '.3rem .8rem' }}
+        >
+          {generating ? '✦ Generating…' : '✦ Generate'}
+        </button>
+        <span style={{ fontSize: 11, color: 'var(--text-xmuted)' }}>⌘↵ to generate</span>
+      </div>
+
+      {error && (
+        <div className="error-msg" style={{ marginTop: '.5rem', fontSize: 12 }}>{error}</div>
+      )}
+
+      {preview && (
+        <div style={{ marginTop: '.75rem' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-xmuted)', letterSpacing: '.04em', marginBottom: '.35rem', textTransform: 'uppercase' }}>Preview</div>
+          <textarea
+            value={preview}
+            onChange={e => setPreview(e.target.value)}
+            rows={mode === 'html' ? 10 : 8}
+            style={{ ...FIELD, resize: 'vertical', fontSize: mode === 'html' ? 12 : 13, fontFamily: mode === 'html' ? 'monospace' : 'inherit', marginBottom: '.5rem' }}
+          />
+          <div style={{ display: 'flex', gap: '.5rem' }}>
+            <button
+              className="btn-primary"
+              onClick={() => { onAccept(preview); onClose(); }}
+              style={{ fontSize: 13, padding: '.3rem .8rem' }}
+            >
+              ✓ Use this
+            </button>
+            <button
+              onClick={() => setPreview('')}
+              style={{ background: 'none', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 13, padding: '.3rem .7rem', cursor: 'pointer', color: 'var(--text-muted)' }}
+            >
+              ↺ Regenerate
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function parseEmailList(str) {
   if (!str?.trim()) return [];
   return str.split(/[,;\n]+/).map(s => s.trim()).filter(s => s.includes('@'));
@@ -61,6 +155,7 @@ export default function ComposeModal({ onClose, onSent, draft = null, onDraftSav
   const [bodyHtml, setBodyHtml] = useState(draft?.body_html || '');
   const [useHtml, setUseHtml] = useState(draft?.use_html || false);
   const [attachments, setAttachments] = useState([]);
+  const [aiOpen, setAiOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftId, setDraftId] = useState(draft?.id || null);
@@ -310,20 +405,47 @@ export default function ComposeModal({ onClose, onSent, draft = null, onDraftSav
               <label style={{ ...LABEL, marginBottom: 0 }}>
                 {useHtml ? 'HTML Body' : 'Body (plain text)'}
               </label>
-              <button
-                onClick={() => setUseHtml(h => !h)}
-                style={{
-                  fontSize: 11, cursor: 'pointer', padding: '.18rem .55rem',
-                  borderRadius: 'var(--radius)',
-                  border: '1.5px solid ' + (useHtml ? 'var(--accent)' : 'var(--border)'),
-                  background: useHtml ? 'var(--accent)' : 'none',
-                  color: useHtml ? 'var(--bg)' : 'var(--text-muted)',
-                  transition: 'all .12s',
-                }}
-              >
-                {useHtml ? '⊟ HTML mode on' : '⊕ Paste HTML'}
-              </button>
+              <div style={{ display: 'flex', gap: '.4rem' }}>
+                <button
+                  onClick={() => setAiOpen(o => !o)}
+                  title="Write with AI"
+                  style={{
+                    fontSize: 11, cursor: 'pointer', padding: '.18rem .55rem',
+                    borderRadius: 'var(--radius)',
+                    border: '1.5px solid ' + (aiOpen ? 'var(--accent)' : 'var(--border)'),
+                    background: aiOpen ? 'var(--accent)' : 'none',
+                    color: aiOpen ? 'var(--bg)' : 'var(--text-muted)',
+                    transition: 'all .12s',
+                  }}
+                >
+                  ✦ AI
+                </button>
+                <button
+                  onClick={() => setUseHtml(h => !h)}
+                  style={{
+                    fontSize: 11, cursor: 'pointer', padding: '.18rem .55rem',
+                    borderRadius: 'var(--radius)',
+                    border: '1.5px solid ' + (useHtml ? 'var(--accent)' : 'var(--border)'),
+                    background: useHtml ? 'var(--accent)' : 'none',
+                    color: useHtml ? 'var(--bg)' : 'var(--text-muted)',
+                    transition: 'all .12s',
+                  }}
+                >
+                  {useHtml ? '⊟ HTML mode on' : '⊕ Paste HTML'}
+                </button>
+              </div>
             </div>
+
+            {aiOpen && (
+              <AiWritePanel
+                subject={subject}
+                fromName={fromName}
+                mode={useHtml ? 'html' : 'text'}
+                onAccept={text => useHtml ? setBodyHtml(text) : setBodyText(text)}
+                onClose={() => setAiOpen(false)}
+              />
+            )}
+
             {useHtml ? (
               <textarea
                 value={bodyHtml}
