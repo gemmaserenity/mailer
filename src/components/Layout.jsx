@@ -30,6 +30,8 @@ function readBranding() {
   return {
     appName: localStorage.getItem('mailer_app_name') || 'Email Sequence Engine',
     appLogoUrl: localStorage.getItem('mailer_app_logo_url') || '',
+    showLogo: localStorage.getItem('mailer_show_logo') !== '0',
+    showName: localStorage.getItem('mailer_show_name') !== '0',
   };
 }
 
@@ -63,23 +65,24 @@ function SidebarContent({ collapsed: sc, onNav, dark, setDark, onCollapse, onCom
         gap: '.4rem',
         flexShrink: 0,
       }}>
-        {!sc && (
-          <div style={{ minWidth: 0, flex: 1 }}>
-            {branding.appLogoUrl ? (
+        {!sc && (branding.showLogo || branding.showName) && (
+          <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: '.2rem' }}>
+            {branding.showLogo && branding.appLogoUrl && (
               <img
                 src={branding.appLogoUrl}
                 alt={branding.appName}
-                style={{ height: 28, maxWidth: 140, objectFit: 'contain', display: 'block' }}
+                style={{ height: 40, maxWidth: 160, objectFit: 'contain', display: 'block' }}
               />
-            ) : (
+            )}
+            {branding.showName && (
               <div style={{ fontFamily: 'var(--font-display)', fontSize: '.95rem', fontWeight: 600, lineHeight: 1.25 }}>
                 {branding.appName}
               </div>
             )}
           </div>
         )}
-        {sc && branding.appLogoUrl && (
-          <img src={branding.appLogoUrl} alt="" style={{ height: 26, width: 26, objectFit: 'contain', borderRadius: 4 }} />
+        {sc && branding.showLogo && branding.appLogoUrl && (
+          <img src={branding.appLogoUrl} alt="" style={{ height: 28, width: 28, objectFit: 'contain', borderRadius: 4 }} />
         )}
         <div style={{ display: 'flex', gap: '.15rem', flexShrink: 0 }}>
           <button
@@ -179,9 +182,14 @@ export default function Layout() {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0 1rem', zIndex: 50, flexShrink: 0,
         }}>
-          {branding.appLogoUrl
-            ? <img src={branding.appLogoUrl} alt={branding.appName} style={{ height: 26, objectFit: 'contain' }} />
-            : <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 600 }}>{branding.appName}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+            {branding.showLogo && branding.appLogoUrl && (
+              <img src={branding.appLogoUrl} alt="" style={{ height: 28, objectFit: 'contain' }} />
+            )}
+            {branding.showName && (
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 600 }}>{branding.appName}</span>
+            )}
+          </div>
           <button
             onClick={() => setDrawerOpen(o => !o)}
             style={{ background: 'none', border: 'none', fontSize: '22px', padding: '.25rem .4rem', borderRadius: 'var(--radius)', cursor: 'pointer', color: 'var(--text)' }}

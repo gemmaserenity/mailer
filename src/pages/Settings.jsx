@@ -5,6 +5,8 @@ export default function Settings() {
   const [senders, setSenders] = useState([]);
   const [appName, setAppName] = useState(() => localStorage.getItem('mailer_app_name') || 'Email Sequence Engine');
   const [appLogoUrl, setAppLogoUrl] = useState(() => localStorage.getItem('mailer_app_logo_url') || '');
+  const [showLogo, setShowLogo] = useState(() => localStorage.getItem('mailer_show_logo') !== '0');
+  const [showName, setShowName] = useState(() => localStorage.getItem('mailer_show_name') !== '0');
   const [defaultSender, setDefaultSender] = useState(() => localStorage.getItem('mailer_default_sender') || '');
   const [signature, setSignature] = useState(() => localStorage.getItem('mailer_signature') || '');
   const [perPage, setPerPage] = useState(() => localStorage.getItem('mailer_per_page') || '50');
@@ -15,6 +17,8 @@ export default function Settings() {
   function save() {
     localStorage.setItem('mailer_app_name', appName.trim() || 'Email Sequence Engine');
     localStorage.setItem('mailer_app_logo_url', appLogoUrl.trim());
+    localStorage.setItem('mailer_show_logo', showLogo ? '1' : '0');
+    localStorage.setItem('mailer_show_name', showName ? '1' : '0');
     localStorage.setItem('mailer_default_sender', defaultSender);
     localStorage.setItem('mailer_signature', signature);
     localStorage.setItem('mailer_per_page', perPage);
@@ -35,35 +39,49 @@ export default function Settings() {
           <h2 style={{ fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-xmuted)', marginBottom: '1rem' }}>
             Branding
           </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
             <div>
               <label>App name</label>
-              <input
-                value={appName}
-                onChange={e => setAppName(e.target.value)}
-                placeholder="Email Sequence Engine"
-              />
-              <p style={{ fontSize: 13, color: 'var(--text-xmuted)', marginTop: '.35rem', lineHeight: 1.5 }}>
-                Shown in the sidebar and mobile header. Takes effect immediately after saving.
-              </p>
+              <input value={appName} onChange={e => setAppName(e.target.value)} placeholder="Email Sequence Engine" />
             </div>
+
             <div>
               <label>Logo URL</label>
-              <input
-                value={appLogoUrl}
-                onChange={e => setAppLogoUrl(e.target.value)}
-                placeholder="https://example.com/logo.png"
-              />
+              <input value={appLogoUrl} onChange={e => setAppLogoUrl(e.target.value)} placeholder="https://mailer.gemmaserenity.com/logo.png" />
               {appLogoUrl.trim() && (
-                <div style={{ marginTop: '.5rem', display: 'flex', alignItems: 'center', gap: '.75rem' }}>
-                  <img src={appLogoUrl.trim()} alt="Logo preview" style={{ height: 32, maxWidth: 180, objectFit: 'contain', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 4, background: 'var(--surface)' }} />
+                <div style={{ marginTop: '.6rem', display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                  <img src={appLogoUrl.trim()} alt="Logo preview" style={{ height: 48, maxWidth: 200, objectFit: 'contain', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 6, background: 'var(--surface)' }} />
                   <span style={{ fontSize: 12, color: 'var(--text-xmuted)' }}>Preview</span>
                 </div>
               )}
-              <p style={{ fontSize: 13, color: 'var(--text-xmuted)', marginTop: '.35rem', lineHeight: 1.5 }}>
-                Replaces the app name text in the sidebar. Leave empty to show text instead.
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
+              <label style={{ marginBottom: 0 }}>Show in sidebar header</label>
+              {[
+                { state: showName, set: setShowName, label: 'App name' },
+                { state: showLogo, set: setShowLogo, label: 'Logo' },
+              ].map(({ state, set, label }) => (
+                <label key={label} style={{
+                  display: 'flex', alignItems: 'center', gap: '.6rem',
+                  fontSize: 14, fontWeight: 400, textTransform: 'none',
+                  letterSpacing: 0, color: 'var(--text)', cursor: 'pointer', marginBottom: 0,
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={state}
+                    onChange={e => set(e.target.checked)}
+                    style={{ width: 16, height: 16, accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }}
+                  />
+                  {label}
+                </label>
+              ))}
+              <p style={{ fontSize: 13, color: 'var(--text-xmuted)', margin: '.1rem 0 0', lineHeight: 1.5 }}>
+                Both can be shown together. Takes effect immediately after saving.
               </p>
             </div>
+
           </div>
         </section>
 
