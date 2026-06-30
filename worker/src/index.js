@@ -648,6 +648,86 @@ async function replyToInbox(env, id, request) {
 }
 
 // ============================================================
+// INBOUND RAW — relay from another CF account (e.g. Sascha's)
+// Public route secured by INBOUND_SECRET header
+// ============================================================
+
+async function handleInboundRaw(env, request, ctx) {
+  const secret = request.headers.get('X-Inbound-Secret');
+  if (!secret || secret !== env.INBOUND_SECRET) return json({ error: 'unauthorized' }, 401);
+
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'invalid json' }, 400); }
+
+  const { raw, to, from: fromRaw } = body;
+  if (!raw || !to) return json({ error: 'raw and to are required' }, 400);
+
+  ctx.waitUntil(processRawInbound(env, { raw, to, fromRaw }));
+  return json({ ok: true });
+}
+
+async function processRawInbound(env, { raw, to, fromRaw }) {
+  try {
+    const binaryStr = atob(raw);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+    const parsed = await new PostalMime().parse(bytes.buffer);
+
+    const toAddress = (to || '').toLowerCase();
+    let fromEmail = fromRaw || '';
+    let fromName = parsed.from?.name || null;
+    const nameMatch = fromRaw?.match(/^(.+?)\s*<([^>]+)>$/);
+    if (nameMatch) {
+      fromName = nameMatch[1].trim();
+      fromEmail = nameMatch[2].trim();
+    }
+
+    const senderRows = await sb(env, `mailer_senders?email=eq.${encodeURIComponent(toAddress)}&select=id,email&limit=1`);
+    const sender = senderRows?.[0] || null;
+
+    const msgKey = (parsed.messageId || `${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const attachmentMeta = [];
+    for (const att of (parsed.attachments || [])) {
+      if (!att.content) continue;
+      const filename = att.filename || `attachment_${attachmentMeta.length + 1}`;
+      const r2Key = `inbox/${msgKey}/${filename}`;
+      await env.ATTACHMENTS.put(r2Key, att.content, {
+        httpMetadata: { contentType: att.mimeType || 'application/octet-stream' },
+      });
+      attachmentMeta.push({
+        filename,
+        content_type: att.mimeType || 'application/octet-stream',
+        size: att.content.byteLength || 0,
+        r2_key: r2Key,
+      });
+    }
+
+    await sb(env, 'mailer_inbox', {
+      method: 'POST',
+      prefer: 'return=minimal,resolution=ignore-duplicates',
+      body: JSON.stringify({
+        sender_id: sender?.id || null,
+        sender_email: sender?.email || toAddress,
+        from_email: fromEmail,
+        from_name: fromName,
+        to_address: toAddress,
+        subject: parsed.subject || null,
+        body_html: parsed.html || null,
+        body_text: parsed.text || null,
+        attachments: attachmentMeta,
+        cc: (parsed.cc || []).map(a => a.address).filter(Boolean),
+        resend_message_id: parsed.messageId || null,
+        read: false,
+        received_at: new Date().toISOString(),
+      }),
+    });
+  } catch (e) {
+    console.error('processRawInbound error:', e);
+  }
+}
+
+// ============================================================
 // INBOUND EMAIL WEBHOOK — Resend POSTs here when email arrives
 // Public route (no auth) — point Resend inbound webhook here
 // ============================================================
@@ -1228,6 +1308,7 @@ export default {
     if (path === '/subscribe' && method === 'POST') return handlePublicSubscribe(env, request, ctx);
     if (path === '/webhooks/resend' && method === 'POST') return handleResendWebhook(env, request, ctx);
     if (path === '/inbox/webhook' && method === 'POST') return handleInboundWebhook(env, request, ctx);
+    if (path === '/inbound-raw' && method === 'POST') return handleInboundRaw(env, request, ctx);
 
     // All other routes require auth
     const authErr = requireAuth(request, env);
