@@ -77,6 +77,74 @@ async function sendViaResend(env, { to, cc, bcc, subject, html, fromName, fromEm
 }
 
 // ============================================================
+// CAN-SPAM FOOTER + UNSUBSCRIBE
+// ============================================================
+
+const WORKER_BASE = 'https://mailer-worker.gemma-serenity.workers.dev';
+
+function buildFooterHtml(businessName, physicalAddress, unsubscribeToken) {
+  if (!unsubscribeToken) return '';
+  const url = `${WORKER_BASE}/unsubscribe?t=${unsubscribeToken}`;
+  const year = new Date().getFullYear();
+  const addr = physicalAddress ? ` &middot; ${physicalAddress}` : '';
+  return [
+    '<div style="margin-top:2.5rem;padding-top:1.25rem;border-top:1px solid #e0d8cc;',
+    'font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#9a8f84;text-align:center;line-height:1.75">',
+    `<p style="margin:0 0 .35rem">&copy; ${year} ${businessName || ''}${addr}</p>`,
+    '<p style="margin:0">You received this because you subscribed to our mailing list. &middot; ',
+    `<a href="${url}" style="color:#9a8f84;text-decoration:underline">Unsubscribe</a></p>`,
+    '</div>',
+  ].join('');
+}
+
+function htmlPage(title, body) {
+  return new Response(
+    `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<title>${title}</title><style>` +
+    `*{box-sizing:border-box}body{margin:0;font-family:Georgia,serif;background:#f7f3ec;` +
+    `color:#1a1a1a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem}` +
+    `.card{background:#fff;border:1px solid #e2d9cc;border-radius:12px;padding:2.5rem 3rem;` +
+    `max-width:480px;width:100%;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.06)}` +
+    `h1{font-size:1.6rem;font-weight:400;margin:0 0 .75rem}` +
+    `p{color:#6b6456;font-size:15px;line-height:1.6;margin:0}` +
+    `</style></head><body><div class="card"><h1>${title}</h1><p>${body}</p></div></body></html>`,
+    { status: 200, headers: { 'Content-Type': 'text/html;charset=UTF-8' } }
+  );
+}
+
+async function handleUnsubscribe(env, url) {
+  const token = url.searchParams.get('t');
+  if (!token) return htmlPage('Invalid link', 'This unsubscribe link is invalid or has expired.');
+
+  let rows;
+  try {
+    rows = await sb(env, `mailer_enrollments?unsubscribe_token=eq.${token}&select=id,status,recipient_email&limit=1`);
+  } catch {
+    return htmlPage('Error', 'Something went wrong. Please try again later.');
+  }
+
+  if (!rows?.length) return htmlPage('Link not found', 'This unsubscribe link was not found or has already been used.');
+
+  const enrollment = rows[0];
+  if (enrollment.status === 'unsubscribed') {
+    return htmlPage('Already unsubscribed', `${enrollment.recipient_email} is already unsubscribed from this mailing list.`);
+  }
+
+  try {
+    await sb(env, `mailer_enrollments?id=eq.${enrollment.id}`, {
+      method: 'PATCH',
+      prefer: 'return=minimal',
+      body: JSON.stringify({ status: 'unsubscribed', updated_at: new Date().toISOString() }),
+    });
+  } catch {
+    return htmlPage('Error', 'Something went wrong processing your request. Please try again.');
+  }
+
+  return htmlPage('You\'re unsubscribed', `${enrollment.recipient_email} has been successfully removed from this mailing list.`);
+}
+
+// ============================================================
 // TEMPLATE VARIABLE MERGING
 // ============================================================
 
@@ -935,10 +1003,16 @@ export class MailerWorkflow extends WorkflowEntrypoint {
 
     if (!steps?.length) return;
 
-    // Load sequence from/name details
+    // Load sequence from/name details + sender CAN-SPAM fields
     const seqMeta = await step.do('load-seq-meta', async () => {
       const rows = await sb(this.env, `mailer_sequences?id=eq.${sequenceId}&select=from_name,from_email&limit=1`);
-      return rows?.[0] || {};
+      const seq = rows?.[0] || {};
+      if (seq.from_email) {
+        const sRows = await sb(this.env, `mailer_senders?email=eq.${encodeURIComponent(seq.from_email)}&select=name,business_name,physical_address&limit=1`);
+        const s = sRows?.[0] || {};
+        return { ...seq, business_name: s.business_name || s.name || '', physical_address: s.physical_address || '' };
+      }
+      return seq;
     });
 
     // Find starting index (resume support)
@@ -972,7 +1046,13 @@ export class MailerWorkflow extends WorkflowEntrypoint {
 
           const recipientData = enrollment.recipient_data || {};
           const subject = mergeVars(template.subject, recipientData);
-          const html = mergeVars(template.html_body, recipientData);
+          const baseHtml = mergeVars(template.html_body, recipientData);
+          const footer = buildFooterHtml(
+            seqMeta.business_name || seqMeta.from_name || '',
+            seqMeta.physical_address || '',
+            enrollment.unsubscribe_token,
+          );
+          const html = baseHtml + footer;
           const idempotencyKey = `enroll-${enrollmentId}-step-${seqStep.id}`;
 
           let resendId = null;
@@ -1309,6 +1389,7 @@ export default {
     if (path === '/webhooks/resend' && method === 'POST') return handleResendWebhook(env, request, ctx);
     if (path === '/inbox/webhook' && method === 'POST') return handleInboundWebhook(env, request, ctx);
     if (path === '/inbound-raw' && method === 'POST') return handleInboundRaw(env, request, ctx);
+    if (path === '/unsubscribe' && method === 'GET') return handleUnsubscribe(env, url);
 
     // All other routes require auth
     const authErr = requireAuth(request, env);
