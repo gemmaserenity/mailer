@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api, fmtDateTime } from '../lib/api.js';
+import { api, fmtDateTime, handleEmailBodyClick } from '../lib/api.js';
 import { useResizablePanel } from '../hooks/useResizablePanel.js';
 
 function fmtSize(bytes) {
@@ -180,7 +180,7 @@ export default function SentView() {
           {loadingMsg ? (
             <div className="loading">Loading…</div>
           ) : selected.body_html ? (
-            <div style={{ fontSize: 15, lineHeight: 1.65 }} dangerouslySetInnerHTML={{ __html: selected.body_html }} />
+            <div style={{ fontSize: 15, lineHeight: 1.65 }} onClick={handleEmailBodyClick} dangerouslySetInnerHTML={{ __html: selected.body_html }} />
           ) : (
             <pre style={{ fontFamily: 'inherit', whiteSpace: 'pre-wrap', margin: 0, fontSize: 15, lineHeight: 1.65 }}>
               {selected.body_text || '(empty)'}

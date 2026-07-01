@@ -3,6 +3,7 @@ import { api } from '../lib/api.js';
 
 export default function Settings() {
   const [senders, setSenders] = useState([]);
+  const [blocklist, setBlocklist] = useState([]);
   const [appName, setAppName] = useState(() => localStorage.getItem('mailer_app_name') || 'Email Sequence Engine');
   const [appLogoUrl, setAppLogoUrl] = useState(() => localStorage.getItem('mailer_app_logo_url') || '');
   const [showLogo, setShowLogo] = useState(() => localStorage.getItem('mailer_show_logo') !== '0');
@@ -13,6 +14,14 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => { api.senders.list().then(setSenders).catch(() => {}); }, []);
+  useEffect(() => { api.blocklist.list().then(setBlocklist).catch(() => {}); }, []);
+
+  async function unblock(id) {
+    try {
+      await api.blocklist.delete(id);
+      setBlocklist(prev => prev.filter(b => b.id !== id));
+    } catch {}
+  }
 
   function save() {
     localStorage.setItem('mailer_app_name', appName.trim() || 'Email Sequence Engine');
@@ -140,6 +149,31 @@ export default function Settings() {
               >{n}</button>
             ))}
           </div>
+        </section>
+
+        <section>
+          <h2 style={{ fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-xmuted)', marginBottom: '1rem' }}>
+            Blocked Senders
+          </h2>
+          {blocklist.length === 0 ? (
+            <p style={{ fontSize: 13, color: 'var(--text-xmuted)', margin: 0 }}>No senders blocked.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
+              {blocklist.map(b => (
+                <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', padding: '.5rem .75rem', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.address}</div>
+                    {b.reason && <div style={{ fontSize: 12, color: 'var(--text-xmuted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.reason}</div>}
+                  </div>
+                  <button className="btn-ghost btn-sm" onClick={() => unblock(b.id)} style={{ flexShrink: 0 }}>Unblock</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <p style={{ fontSize: 13, color: 'var(--text-xmuted)', marginTop: '.75rem', lineHeight: 1.5 }}>
+            Unblocking stops future mail from that address from being flagged, but won't
+            un-flag messages already in the Spam folder — use "Not Spam" on those individually.
+          </p>
         </section>
 
         <div style={{ paddingTop: '.5rem' }}>

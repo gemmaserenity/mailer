@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api, fmtDateTime } from '../lib/api.js';
+import { api, fmtDateTime, handleEmailBodyClick } from '../lib/api.js';
 import { useResizablePanel } from '../hooks/useResizablePanel.js';
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || '';
@@ -73,9 +73,11 @@ export default function InboxView() {
     try {
       const params = selectedSender === 'archived'
         ? { archived: true, limit: perPage }
-        : selectedSender !== 'all'
-          ? { sender_id: selectedSender, limit: perPage }
-          : { limit: perPage };
+        : selectedSender === 'spam'
+          ? { spam: true, limit: perPage }
+          : selectedSender !== 'all'
+            ? { sender_id: selectedSender, limit: perPage }
+            : { limit: perPage };
       setMessages(await api.inbox.list(params));
       setError(null);
     } catch (e) {
@@ -164,6 +166,24 @@ export default function InboxView() {
     } catch (e) { setError(e.message); }
   }
 
+  async function handleReportSpam() {
+    try {
+      await api.inbox.reportSpam(selectedMsg.id);
+      flash('Reported — sender blocked & forwarded to APWG');
+      setMessages(prev => prev.filter(m => m.id !== selectedMsg.id));
+      setSelectedMsg(null);
+    } catch (e) { setError(e.message); }
+  }
+
+  async function handleNotSpam() {
+    try {
+      await api.inbox.notSpam(selectedMsg.id);
+      flash('Restored — sender unblocked');
+      setMessages(prev => prev.filter(m => m.id !== selectedMsg.id));
+      setSelectedMsg(null);
+    } catch (e) { setError(e.message); }
+  }
+
   async function handleDelete() {
     if (!confirmDelete) { setConfirmDelete(true); return; }
     try {
@@ -221,6 +241,7 @@ export default function InboxView() {
           {[
             { id: 'all', label: 'All' },
             { id: 'archived', label: '⊟ Archived' },
+            { id: 'spam', label: '⚠ Spam' },
             ...senders.map(s => ({ id: s.id, label: (s.email || '').split('@')[0] })),
           ].map(s => (
             <button key={s.id} onClick={() => setSelectedSender(s.id)} style={pillStyle(selectedSender === s.id)}>
@@ -311,7 +332,7 @@ export default function InboxView() {
           {loadingMsg ? (
             <div className="loading" style={{ padding: '1rem 0' }}>Loading message…</div>
           ) : selectedMsg.body_html ? (
-            <div style={{ fontSize: 15, lineHeight: 1.65, flex: 1 }} dangerouslySetInnerHTML={{ __html: selectedMsg.body_html }} />
+            <div style={{ fontSize: 15, lineHeight: 1.65, flex: 1 }} onClick={handleEmailBodyClick} dangerouslySetInnerHTML={{ __html: selectedMsg.body_html }} />
           ) : (
             <pre style={{ fontFamily: 'inherit', whiteSpace: 'pre-wrap', margin: 0, fontSize: 15, lineHeight: 1.65, flex: 1 }}>
               {selectedMsg.body_text || '(empty message)'}
@@ -350,6 +371,11 @@ export default function InboxView() {
                   <button style={BTN} onClick={handleArchive} title={selectedMsg.archived ? 'Move to inbox' : 'Archive'}>
                     {selectedMsg.archived ? '↩ Unarchive' : '⊟ Archive'}
                   </button>
+                  {selectedMsg.spam ? (
+                    <button style={BTN} onClick={handleNotSpam} title="Not spam — unblock sender">↩ Not Spam</button>
+                  ) : (
+                    <button style={BTN_DANGER} onClick={handleReportSpam} title="Block sender & report to APWG">⚠ Report Spam/Scam</button>
+                  )}
                   {confirmDelete ? (
                     <>
                       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Delete forever?</span>

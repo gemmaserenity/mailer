@@ -76,6 +76,7 @@ export const api = {
       const q = new URLSearchParams();
       if (params.sender_id) q.set('sender_id', params.sender_id);
       if (params.archived) q.set('archived', '1');
+      if (params.spam) q.set('spam', '1');
       if (params.unread) q.set('unread', '1');
       if (params.limit) q.set('limit', String(params.limit));
       if (params.offset) q.set('offset', String(params.offset));
@@ -88,6 +89,12 @@ export const api = {
     archive: (id) => call(`/inbox/${id}/archive`, { method: 'PUT' }),
     unarchive: (id) => call(`/inbox/${id}/archive`, { method: 'DELETE' }),
     delete: (id) => call(`/inbox/${id}`, { method: 'DELETE' }),
+    reportSpam: (id) => call(`/inbox/${id}/spam`, { method: 'PUT' }),
+    notSpam: (id) => call(`/inbox/${id}/spam`, { method: 'DELETE' }),
+  },
+  blocklist: {
+    list: () => call('/blocklist'),
+    delete: (id) => call(`/blocklist/${id}`, { method: 'DELETE' }),
   },
   compose: {
     send: (body) => call('/send-email', { method: 'POST', body: JSON.stringify(body) }),
@@ -151,4 +158,16 @@ export function fmtDate(ts) {
 export function fmtDateTime(ts) {
   if (!ts) return '—';
   return new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+// Intercepts clicks inside rendered (untrusted) email HTML so links always
+// open in a new tab instead of navigating the mailer engine itself away.
+export function handleEmailBodyClick(e) {
+  const link = e.target.closest('a');
+  if (!link) return;
+  e.preventDefault();
+  const href = link.getAttribute('href') || '';
+  if (/^https?:|^mailto:/i.test(href)) {
+    window.open(href, '_blank', 'noopener,noreferrer');
+  }
 }
